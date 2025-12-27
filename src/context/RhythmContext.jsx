@@ -11,26 +11,36 @@ const SOUND_MAP = { 1: sound1, 2: sound2, 3: sound3, 4: sound4 };
 const RhythmContext = createContext();
 export const useRhythm = () => useContext(RhythmContext);
 
-// --- PATTERN LIBRARY ---
+// --- PATTERN LIBRARY (Strictly Audited) ---
+// 1.0 = Full Measure in 4/4
 const PATTERN_LIBRARY = {
   '4/4': [
-    // Standard Rock
+    // 1. Straight 8ths (Rock)
+    // 8 * 0.125 = 1.0
     [
-      { strum: 'D', duration: 0.25 }, { strum: 'D', duration: 0.25 }, 
+      { strum: 'D', duration: 0.125 }, { strum: 'U', duration: 0.125 }, 
       { strum: 'D', duration: 0.125 }, { strum: 'U', duration: 0.125 }, 
       { strum: 'D', duration: 0.125 }, { strum: 'U', duration: 0.125 },
+      { strum: 'D', duration: 0.125 }, { strum: 'U', duration: 0.125 },
     ],
-    // Island Strum (D - D U - U D U)
+    // 2. The "Campfire" (D - D U - U D U)
+    // Math: 0.25 + 0.125+0.125 + 0.125(rest)+0.125 + 0.125+0.125 = 1.0
+    [
+      { strum: 'D', duration: 0.25 },   // Beat 1
+      { strum: 'D', duration: 0.125 },  // Beat 2
+      { strum: 'U', duration: 0.125 },  // &
+      { strum: ' ', duration: 0.125 },  // Beat 3 (Miss/Ghost)
+      { strum: 'U', duration: 0.125 },  // &
+      { strum: 'D', duration: 0.125 },  // Beat 4
+      { strum: 'U', duration: 0.125 }   // &
+    ],
+    // 3. Pop Ballad (D - D - D - D U)
+    // Math: 0.25 + 0.25 + 0.25 + 0.125 + 0.125 = 1.0
     [
       { strum: 'D', duration: 0.25 }, 
-      { strum: 'D', duration: 0.25 }, // Ghost/Space actually, but simpler for now
-      { strum: 'D', duration: 0.125 }, { strum: 'U', duration: 0.125 }, 
-      { strum: 'U', duration: 0.125 }, { strum: 'D', duration: 0.125 }, { strum: 'U', duration: 0.125 }
-    ],
-    // Pop Ballad
-    [
-      { strum: 'D', duration: 0.25 }, { strum: 'D', duration: 0.25 }, 
-      { strum: 'D', duration: 0.25 }, { strum: 'D', duration: 0.125 }, { strum: 'U', duration: 0.125 }
+      { strum: 'D', duration: 0.25 }, 
+      { strum: 'D', duration: 0.25 }, 
+      { strum: 'D', duration: 0.125 }, { strum: 'U', duration: 0.125 }
     ]
   ],
   '3/4': [
@@ -44,10 +54,6 @@ const PATTERN_LIBRARY = {
     [
       { strum: 'D', duration: 0.125 }, { strum: 'U', duration: 0.125 }, { strum: 'D', duration: 0.125 }, 
       { strum: 'D', duration: 0.125 }, { strum: 'U', duration: 0.125 }, { strum: 'D', duration: 0.125 }
-    ],
-    // Slow Blues
-    [
-       { strum: 'D', duration: 0.375 }, { strum: 'D', duration: 0.375 }
     ]
   ],
   'Funk': [
@@ -81,6 +87,7 @@ export const RhythmProvider = ({ children }) => {
   // Visual State
   const [currentStepIndex, setCurrentStepIndex] = useState(-1);
   const [currentMeasureIndex, setCurrentMeasureIndex] = useState(0); 
+  const [currentBeat, setCurrentBeat] = useState(1); 
   const [isCountingIn, setIsCountingIn] = useState(false);
   const [countInBeat, setCountInBeat] = useState(0);
 
@@ -102,11 +109,11 @@ export const RhythmProvider = ({ children }) => {
   const regeneratePattern = useCallback(() => {
     const options = PATTERN_LIBRARY[timeSig];
     if (!options) return;
+    // Pick random but ensure it actually changes if possible
     const randomIdx = Math.floor(Math.random() * options.length);
     setCurrentPattern(options[randomIdx]);
   }, [timeSig]);
 
-  // When Time Sig changes, reset pattern to first available
   useEffect(() => {
     const options = PATTERN_LIBRARY[timeSig] || PATTERN_LIBRARY['4/4'];
     setCurrentPattern(options[0]);
@@ -181,6 +188,7 @@ export const RhythmProvider = ({ children }) => {
     setIsCountingIn(false);
     setCurrentStepIndex(-1);
     setCurrentMeasureIndex(0);
+    setCurrentBeat(1);
     setCountInBeat(0);
     engineState.current.accumulatedTime = 0;
   };
@@ -223,6 +231,9 @@ export const RhythmProvider = ({ children }) => {
     const isBeatStart = (Math.abs(accTime % 0.25) < 0.001);
     const isMeasureStart = (Math.abs(accTime) < 0.001);
 
+    const calculatedBeat = Math.floor(accTime / 0.25) + 1;
+    setCurrentBeat(calculatedBeat);
+
     if (isMeasureStart) playClick(true);
     else if (isBeatStart) playClick(false);
 
@@ -252,7 +263,7 @@ export const RhythmProvider = ({ children }) => {
       isPlaying, startPlayback, stopPlayback,
       countIn, setCountIn, volume, setVolume, clickType, setClickType,
       currentStepIndex, currentPattern, regeneratePattern,
-      isCountingIn, countInBeat, currentMeasureIndex 
+      isCountingIn, countInBeat, currentMeasureIndex, currentBeat 
     }}>
       {children}
     </RhythmContext.Provider>
