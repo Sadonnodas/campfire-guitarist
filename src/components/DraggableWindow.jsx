@@ -1,7 +1,7 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef } from 'react';
 import { X, GripHorizontal, MoveDiagonal } from 'lucide-react';
 
-const DraggableWindow = ({ config, children, onFocus, onUpdate, onClose }) => {
+const DraggableWindow = ({ config, children, onMouseDown, onUpdate, onClose, isSelected }) => {
   const { x, y, w, h, z, title } = config;
   
   // Drag State
@@ -14,8 +14,9 @@ const DraggableWindow = ({ config, children, onFocus, onUpdate, onClose }) => {
 
   // --- DRAG HANDLERS ---
   const handleMouseDown = (e) => {
-    onFocus(); // Bring to front
-    // Only drag if clicking header
+    // Notify Parent (Selects window)
+    onMouseDown(e); 
+    
     isDragging.current = true;
     dragOffset.current = { x: e.clientX - x, y: e.clientY - y };
     
@@ -25,8 +26,11 @@ const DraggableWindow = ({ config, children, onFocus, onUpdate, onClose }) => {
 
   const handleDragMove = (e) => {
     if (!isDragging.current) return;
+    // Calculate new raw position
     const newX = e.clientX - dragOffset.current.x;
     const newY = e.clientY - dragOffset.current.y;
+    
+    // Send to parent. Parent handles "Delta" calculation for groups.
     onUpdate({ x: newX, y: newY });
   };
 
@@ -39,7 +43,8 @@ const DraggableWindow = ({ config, children, onFocus, onUpdate, onClose }) => {
   // --- RESIZE HANDLERS ---
   const handleResizeDown = (e) => {
     e.stopPropagation();
-    onFocus();
+    onMouseDown(e); // Select window on resize start
+    
     isResizing.current = true;
     resizeStart.current = { x: e.clientX, y: e.clientY, w, h };
     
@@ -52,9 +57,10 @@ const DraggableWindow = ({ config, children, onFocus, onUpdate, onClose }) => {
     const deltaX = e.clientX - resizeStart.current.x;
     const deltaY = e.clientY - resizeStart.current.y;
     
+    // Parent handles group scaling
     onUpdate({ 
         w: Math.max(200, resizeStart.current.w + deltaX), 
-        h: Math.max(150, resizeStart.current.h + deltaY) 
+        h: Math.max(120, resizeStart.current.h + deltaY) 
     });
   };
 
@@ -66,19 +72,22 @@ const DraggableWindow = ({ config, children, onFocus, onUpdate, onClose }) => {
 
   return (
     <div 
-      className="absolute bg-slate-900/90 backdrop-blur-xl border border-white/10 rounded-lg shadow-2xl flex flex-col overflow-hidden"
+      className={`absolute bg-slate-900/90 backdrop-blur-xl border rounded-lg shadow-2xl flex flex-col overflow-hidden transition-colors duration-200
+        ${isSelected ? 'border-blue-500 shadow-[0_0_20px_rgba(59,130,246,0.5)]' : 'border-white/10'}
+      `}
       style={{ 
         left: x, top: y, width: w, height: h, zIndex: z,
-        boxShadow: '0 0 40px rgba(0,0,0,0.5)'
       }}
-      onMouseDown={onFocus}
+      onMouseDown={onMouseDown} // Clicking body also selects
     >
       {/* Header */}
       <div 
-        className="h-9 bg-white/5 border-b border-white/5 flex items-center justify-between px-3 cursor-grab active:cursor-grabbing select-none"
+        className={`h-9 border-b flex items-center justify-between px-3 cursor-grab active:cursor-grabbing select-none
+            ${isSelected ? 'bg-blue-500/20 border-blue-500/30' : 'bg-white/5 border-white/5'}
+        `}
         onMouseDown={handleMouseDown}
       >
-        <div className="flex items-center gap-2 text-slate-300">
+        <div className={`flex items-center gap-2 ${isSelected ? 'text-blue-200' : 'text-slate-300'}`}>
             <GripHorizontal size={14} />
             <span className="text-xs font-bold uppercase tracking-wide">{title}</span>
         </div>
@@ -94,7 +103,9 @@ const DraggableWindow = ({ config, children, onFocus, onUpdate, onClose }) => {
 
       {/* Resize Handle */}
       <div 
-        className="absolute bottom-0 right-0 w-6 h-6 flex items-center justify-center cursor-nwse-resize text-slate-600 hover:text-orange-500 transition-colors z-20"
+        className={`absolute bottom-0 right-0 w-6 h-6 flex items-center justify-center cursor-nwse-resize transition-colors z-20 
+            ${isSelected ? 'text-blue-500 hover:text-white' : 'text-slate-600 hover:text-orange-500'}
+        `}
         onMouseDown={handleResizeDown}
       >
         <MoveDiagonal size={14} />

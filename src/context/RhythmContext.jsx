@@ -11,32 +11,25 @@ const SOUND_MAP = { 1: sound1, 2: sound2, 3: sound3, 4: sound4 };
 const RhythmContext = createContext();
 export const useRhythm = () => useContext(RhythmContext);
 
-// --- PATTERN LIBRARY (Strictly Audited) ---
-// 1.0 = Full Measure in 4/4
+// --- PATTERN LIBRARY ---
 const PATTERN_LIBRARY = {
   '4/4': [
-    // 1. Straight 8ths (Rock)
-    // 8 * 0.125 = 1.0
-    [
+    [ // Standard Rock
       { strum: 'D', duration: 0.125 }, { strum: 'U', duration: 0.125 }, 
       { strum: 'D', duration: 0.125 }, { strum: 'U', duration: 0.125 }, 
       { strum: 'D', duration: 0.125 }, { strum: 'U', duration: 0.125 },
       { strum: 'D', duration: 0.125 }, { strum: 'U', duration: 0.125 },
     ],
-    // 2. The "Campfire" (D - D U - U D U)
-    // Math: 0.25 + 0.125+0.125 + 0.125(rest)+0.125 + 0.125+0.125 = 1.0
-    [
-      { strum: 'D', duration: 0.25 },   // Beat 1
-      { strum: 'D', duration: 0.125 },  // Beat 2
-      { strum: 'U', duration: 0.125 },  // &
-      { strum: ' ', duration: 0.125 },  // Beat 3 (Miss/Ghost)
-      { strum: 'U', duration: 0.125 },  // &
-      { strum: 'D', duration: 0.125 },  // Beat 4
-      { strum: 'U', duration: 0.125 }   // &
+    [ // Island Strum
+      { strum: 'D', duration: 0.25 },   
+      { strum: 'D', duration: 0.125 },  
+      { strum: 'U', duration: 0.125 },  
+      { strum: ' ', duration: 0.125 },  
+      { strum: 'U', duration: 0.125 },  
+      { strum: 'D', duration: 0.125 },  
+      { strum: 'U', duration: 0.125 }   
     ],
-    // 3. Pop Ballad (D - D - D - D U)
-    // Math: 0.25 + 0.25 + 0.25 + 0.125 + 0.125 = 1.0
-    [
+    [ // Pop Ballad
       { strum: 'D', duration: 0.25 }, 
       { strum: 'D', duration: 0.25 }, 
       { strum: 'D', duration: 0.25 }, 
@@ -44,13 +37,10 @@ const PATTERN_LIBRARY = {
     ]
   ],
   '3/4': [
-    // Waltz
     [{ strum: 'D', duration: 0.25 }, { strum: 'D', duration: 0.25 }, { strum: 'D', duration: 0.25 }],
-    // Folk 3/4
     [{ strum: 'D', duration: 0.25 }, { strum: 'D', duration: 0.125 }, { strum: 'U', duration: 0.125 }, { strum: 'D', duration: 0.25 }]
   ],
   '6/8': [ 
-    // Standard 6/8
     [
       { strum: 'D', duration: 0.125 }, { strum: 'U', duration: 0.125 }, { strum: 'D', duration: 0.125 }, 
       { strum: 'D', duration: 0.125 }, { strum: 'U', duration: 0.125 }, { strum: 'D', duration: 0.125 }
@@ -73,7 +63,6 @@ const TIME_SIG_CONFIG = {
 };
 
 export const RhythmProvider = ({ children }) => {
-  // State
   const [bpm, setBpm] = useState(70);
   const [timeSig, setTimeSig] = useState('4/4');
   const [isPlaying, setIsPlaying] = useState(false);
@@ -81,13 +70,11 @@ export const RhythmProvider = ({ children }) => {
   const [volume, setVolume] = useState(0.5);
   const [clickType, setClickType] = useState('accented'); 
 
-  // Dynamic Pattern State
+  // Engine State
   const [currentPattern, setCurrentPattern] = useState(PATTERN_LIBRARY['4/4'][0]);
-
-  // Visual State
   const [currentStepIndex, setCurrentStepIndex] = useState(-1);
   const [currentMeasureIndex, setCurrentMeasureIndex] = useState(0); 
-  const [currentBeat, setCurrentBeat] = useState(1); 
+  const [measureProgress, setMeasureProgress] = useState(0); // Exposed for widgets
   const [isCountingIn, setIsCountingIn] = useState(false);
   const [countInBeat, setCountInBeat] = useState(0);
 
@@ -109,7 +96,6 @@ export const RhythmProvider = ({ children }) => {
   const regeneratePattern = useCallback(() => {
     const options = PATTERN_LIBRARY[timeSig];
     if (!options) return;
-    // Pick random but ensure it actually changes if possible
     const randomIdx = Math.floor(Math.random() * options.length);
     setCurrentPattern(options[randomIdx]);
   }, [timeSig]);
@@ -146,8 +132,7 @@ export const RhythmProvider = ({ children }) => {
     }
   }, [volume]);
 
-  // --- PLAYERS ---
-  const playOscillator = (freq, type = 'sine') => {
+  const playOscillator = (freq) => {
     if (!audioCtxRef.current) return;
     const ctx = audioCtxRef.current;
     const osc = ctx.createOscillator();
@@ -155,7 +140,7 @@ export const RhythmProvider = ({ children }) => {
     osc.connect(gain);
     gain.connect(masterGainRef.current);
     osc.frequency.value = freq;
-    osc.type = type;
+    osc.type = 'sine';
     gain.gain.setValueAtTime(1, ctx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1);
     osc.start();
@@ -188,7 +173,7 @@ export const RhythmProvider = ({ children }) => {
     setIsCountingIn(false);
     setCurrentStepIndex(-1);
     setCurrentMeasureIndex(0);
-    setCurrentBeat(1);
+    setMeasureProgress(0); // Reset
     setCountInBeat(0);
     engineState.current.accumulatedTime = 0;
   };
@@ -231,14 +216,13 @@ export const RhythmProvider = ({ children }) => {
     const isBeatStart = (Math.abs(accTime % 0.25) < 0.001);
     const isMeasureStart = (Math.abs(accTime) < 0.001);
 
-    const calculatedBeat = Math.floor(accTime / 0.25) + 1;
-    setCurrentBeat(calculatedBeat);
-
     if (isMeasureStart) playClick(true);
     else if (isBeatStart) playClick(false);
 
+    // Update Visuals
     setCurrentStepIndex(idx);
     setCurrentMeasureIndex(engineState.current.measureIndex);
+    setMeasureProgress(accTime); // Update progress for Widgets!
 
     const msDuration = (240000 * stepData.duration) / bpm;
 
@@ -263,7 +247,7 @@ export const RhythmProvider = ({ children }) => {
       isPlaying, startPlayback, stopPlayback,
       countIn, setCountIn, volume, setVolume, clickType, setClickType,
       currentStepIndex, currentPattern, regeneratePattern,
-      isCountingIn, countInBeat, currentMeasureIndex, currentBeat 
+      isCountingIn, countInBeat, currentMeasureIndex, measureProgress
     }}>
       {children}
     </RhythmContext.Provider>
