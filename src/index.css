@@ -1,68 +1,95 @@
-:root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
+@import "tailwindcss";
 
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
+/* =========================================
+   DESIGN SYSTEM / THEME SETTINGS
+   Change these variables to update the look.
+   ========================================= */
+@theme {
+  /* BACKGROUNDS (The Ash Palette) */
+  --color-ash-dark: #1c1917;   /* Main Background */
+  --color-ash-medium: #292524; /* Card Backgrounds */
+  --color-ash-light: #44403c;  /* Borders */
+  
+  /* ACCENTS (The Ember Palette) */
+  --color-ember: #f59e0b;        /* Main Orange */
+  --color-ember-glow: #d97706;   /* Darker Orange */
+  --color-ember-bright: #fbbf24; /* Brighter Yellow-Orange */
 
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
+  /* TEXT */
+  --color-smoke: #e7e5e4;     /* Main Text */
+  --color-smoke-dim: #a8a29e; /* Muted Text */
 
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
-}
-a:hover {
-  color: #535bf2;
-}
-
-body {
-  margin: 0;
-  display: flex;
-  place-items: center;
-  min-width: 320px;
-  min-height: 100vh;
+  /* ANIMATIONS */
+  --animate-pulse-slow: pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
 }
 
-h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
-}
-
-button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  background-color: #1a1a1a;
-  cursor: pointer;
-  transition: border-color 0.25s;
-}
-button:hover {
-  border-color: #646cff;
-}
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
-}
-
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #213547;
-    background-color: #ffffff;
+/* =========================================
+   GLOBAL STYLES
+   ========================================= */
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+    scroll-behavior: smooth;
   }
-  a:hover {
-    color: #747bff;
+  
+  body {
+    background-color: var(--color-ash-dark);
+    color: var(--color-smoke);
+    font-family: var(--font-sans);
+    margin: 0;
+    min-height: 100vh;
+    /* The subtle background gradient */
+    background-image: radial-gradient(circle at 50% 0%, #292524 0%, #1c1917 60%);
+    background-attachment: fixed;
   }
-  button {
-    background-color: #f9f9f9;
+}
+
+/* =========================================
+   COMPONENT CLASSES
+   ========================================= */
+@layer components {
+  /* Glass Card Effect */
+  .card {
+    @apply relative overflow-hidden rounded-3xl border border-ash-light/30 bg-ash-medium/40 backdrop-blur-xl p-8 shadow-2xl transition-all duration-300;
+  }
+  
+  .card:hover {
+    @apply border-ember/30 shadow-[0_0_30px_rgba(245,158,11,0.1)];
+  }
+
+  /* Main Action Button */
+  .btn-primary {
+    @apply relative overflow-hidden rounded-xl px-6 py-4 font-bold uppercase tracking-widest text-ash-dark transition-all duration-300 cursor-pointer;
+    background: linear-gradient(135deg, var(--color-ember-bright), var(--color-ember));
+    box-shadow: 0 4px 20px -5px rgba(245, 158, 11, 0.5);
+  }
+
+  .btn-primary:hover {
+    @apply scale-[1.02] -translate-y-1;
+    box-shadow: 0 10px 30px -5px rgba(245, 158, 11, 0.7);
+  }
+  
+  .btn-primary:active {
+    @apply scale-95 translate-y-0;
+  }
+  
+  /* Ghost/Secondary Button */
+  .btn-ghost {
+    @apply rounded-xl p-3 text-smoke-dim hover:bg-ash-light/50 hover:text-ember transition-colors cursor-pointer;
+  }
+}
+
+/* =========================================
+   UTILITIES
+   ========================================= */
+@layer utilities {
+  .text-glow {
+    text-shadow: 0 0 20px rgba(245, 158, 11, 0.6);
+  }
+  
+  /* FIXED: Removed the typo 'text-lp-transparent' */
+  .text-gradient-ember {
+    @apply bg-gradient-to-br from-ember-bright to-ember-glow bg-clip-text text-transparent;
   }
 }
