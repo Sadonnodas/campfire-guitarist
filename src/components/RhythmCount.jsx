@@ -2,90 +2,80 @@ import React, { useState } from 'react';
 import { useRhythm } from '../context/RhythmContext';
 
 const RhythmCount = () => {
-  const { measureProgress, timeSig, isPlaying } = useRhythm();
-  const [resolution, setResolution] = useState('8th'); // '4th', '8th', '16th'
+  const { measureProgress, timeSig, isPlaying, isCountingIn, countInBeat } = useRhythm();
+  const [resolution, setResolution] = useState('8th'); 
 
-  // --- GENERATE GRID ---
-  // Returns array of { label: string, time: number }
+  // --- COUNT IN OVERLAY MODE ---
+  if (isCountingIn) {
+      return (
+        <div className="h-full w-full flex items-center justify-center bg-black/40 rounded-xl border border-white/5 relative overflow-hidden">
+             {/* Pulsing Count */}
+             <div className="flex flex-col items-center z-10 animate-in zoom-in duration-300 key={countInBeat}">
+                 <span className="text-8xl font-black text-orange-500 tracking-tighter drop-shadow-lg">
+                    {/* For 6/8, map 4,5,6 to 1,2,3 visually */}
+                    {timeSig === '6/8' ? ((countInBeat - 1) % 3) + 1 : countInBeat}
+                 </span>
+                 <span className="text-sm font-bold text-slate-400 uppercase tracking-[0.3em] mt-2">Get Ready</span>
+             </div>
+             
+             {/* Background Pulse Effect */}
+             <div className="absolute inset-0 bg-orange-500/10 animate-pulse" />
+        </div>
+      )
+  }
+
+  // --- STANDARD GRID DISPLAY ---
   const getGrid = () => {
     const items = [];
     
-    // Config based on Time Signature
-    let beatsPerBar = 4;
-    if (timeSig === '3/4') beatsPerBar = 3;
-    if (timeSig === '6/8') beatsPerBar = 6; // Usually counted 1-6 in 8ths
-
     if (timeSig === '6/8') {
-        // Special logic for 6/8
         if (resolution === '16th') {
              for(let i=1; i<=6; i++) {
                  const t = (i-1) * 0.125;
-                 items.push({ label: `${i}`, time: t });
-                 items.push({ label: '+', time: t + 0.0625 });
+                 items.push({ label: `${i}`, time: t, isBeat: true });
+                 items.push({ label: '+', time: t + 0.0625, isBeat: false });
              }
         } else {
-             // 8th (Standard) or 4th (Dotted?) - Let's stick to 1-6 for simplicity
              for(let i=1; i<=6; i++) {
-                 items.push({ label: `${i}`, time: (i-1) * 0.125 });
+                 items.push({ label: `${i}`, time: (i-1) * 0.125, isBeat: true });
              }
         }
     } else {
-        // Standard 4/4 and 3/4 logic
-        for (let i = 1; i <= beatsPerBar; i++) {
-            const beatTime = (i - 1) * 0.25; // 0.0, 0.25, 0.5...
-            
-            // BEAT (Always show)
-            items.push({ label: `${i}`, time: beatTime });
-
-            if (resolution === '8th' || resolution === '16th') {
-                items.push({ label: '+', time: beatTime + 0.125 });
+        const beats = timeSig === '3/4' ? 3 : 4;
+        if (resolution === '4th') {
+            for(let i=1; i<=beats; i++) items.push({ label: `${i}`, time: (i-1)*0.25, isBeat: true });
+        } else if (resolution === '8th') {
+            for(let i=1; i<=beats; i++) {
+                const t = (i-1)*0.25;
+                items.push({ label: `${i}`, time: t, isBeat: true });
+                items.push({ label: '+', time: t+0.125, isBeat: false });
             }
-
-            if (resolution === '16th') {
-                // Insert 'e' and 'a'
-                // Note: Array order matters for display, so we insert differently
-                // Actually simpler to just generate linear list
+        } else {
+            for(let i=1; i<=beats; i++) {
+                const t = (i-1)*0.25;
+                items.push({ label: `${i}`, time: t, isBeat: true });
+                items.push({ label: 'e', time: t+0.0625, isBeat: false });
+                items.push({ label: '+', time: t+0.125, isBeat: false });
+                items.push({ label: 'a', time: t+0.1875, isBeat: false });
             }
         }
     }
-    
-    // Re-generate linear sorted list for cleaner code (handles the 16th insertion better)
-    const linearGrid = [];
-    if (timeSig !== '6/8') {
-        for (let i = 1; i <= beatsPerBar; i++) {
-            const t = (i - 1) * 0.25;
-            linearGrid.push({ label: `${i}`, time: t, isBeat: true });
-            
-            if (resolution === '16th') {
-                linearGrid.push({ label: 'e', time: t + 0.0625, isSub: true });
-                linearGrid.push({ label: '+', time: t + 0.125, isSub: true });
-                linearGrid.push({ label: 'a', time: t + 0.1875, isSub: true });
-            } else if (resolution === '8th') {
-                linearGrid.push({ label: '+', time: t + 0.125, isSub: true });
-            }
-        }
-        return linearGrid;
-    } else {
-        // 6/8 Logic
-        for(let i=1; i<=6; i++) {
-             const t = (i-1) * 0.125;
-             linearGrid.push({ label: `${i}`, time: t, isBeat: true });
-             if (resolution === '16th') {
-                 linearGrid.push({ label: '+', time: t + 0.0625, isSub: true });
-             }
-        }
-        return linearGrid;
-    }
+    return items;
   };
 
   const gridItems = getGrid();
+  
+  // Normalize measure progress for 6/8 (0.75 total) vs 4/4 (1.0 total)
+  const duration = timeSig === '6/8' || timeSig === '3/4' ? 0.75 : 1.0;
+  // If loop wraps, ensure we don't flash index 0 at end
+  const currentProgress = measureProgress >= duration - 0.01 ? 0 : measureProgress;
 
   return (
-    <div className="h-full flex flex-col p-2">
-      {/* Settings Header */}
-      <div className="flex justify-end mb-2 bg-black/20 p-1 rounded-lg">
+    <div className="h-full flex flex-col bg-slate-900/50 p-2 gap-2">
+      {/* Res Toggles */}
+      <div className="flex justify-center gap-1 border-b border-white/5 pb-2">
          {['4th', '8th', '16th'].map(res => (
-             <button
+             <button 
                 key={res}
                 onClick={() => setResolution(res)}
                 className={`px-3 py-1 text-[10px] font-bold rounded transition-all ${resolution === res ? 'bg-orange-500 text-white' : 'text-slate-500 hover:text-white'}`}
@@ -98,17 +88,14 @@ const RhythmCount = () => {
       {/* Grid Display */}
       <div className="flex-1 flex items-center justify-between gap-1">
          {gridItems.map((item, idx) => {
-             // Highlight Logic
-             // We check if current measureProgress matches the item time.
-             // Using a small epsilon because floats are imprecise.
-             const isActive = isPlaying && Math.abs(measureProgress - item.time) < 0.01;
+             const isActive = isPlaying && Math.abs(currentProgress - item.time) < (resolution === '16th' ? 0.03 : 0.06);
              
              return (
                  <div 
                     key={idx} 
-                    className={`flex-1 flex flex-col items-center justify-center h-full rounded-lg transition-all duration-100 ${
+                    className={`flex-1 flex flex-col items-center justify-center h-full rounded-lg transition-all duration-75 ${
                         isActive 
-                        ? 'bg-orange-500 text-white scale-110 shadow-[0_0_15px_rgba(249,115,22,0.6)] z-10' 
+                        ? 'bg-orange-500 text-white scale-110 shadow-lg z-10' 
                         : 'bg-white/5 text-slate-600'
                     }`}
                  >

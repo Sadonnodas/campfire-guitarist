@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useState, useRef, useEffect, useCallback } from 'react';
 import { RHYTHM_PATTERNS } from '../data/rhythmPatterns';
+import { generateValidPattern } from '../utils/rhythmGenerator';
 
-// --- SOUND IMPORTS ---
+// Sounds
 import sound1 from '../assets/sounds/1.wav';
 import sound2 from '../assets/sounds/2.wav';
 import sound3 from '../assets/sounds/3.wav';
@@ -24,16 +25,13 @@ export const RhythmProvider = ({ children }) => {
   const [metronomeResolution, setMetronomeResolution] = useState('4n');
   const [metronomeStyle, setMetronomeStyle] = useState('pattern'); 
 
-  // --- REF FOR INSTANT UPDATES ---
-  const latestSettings = useRef({
-    bpm, volume, metronomeResolution, metronomeStyle, clickType
-  });
+  // Ref for instant updates inside the audio loop
+  const latestSettings = useRef({ bpm, volume, metronomeResolution, metronomeStyle, clickType });
 
   useEffect(() => {
     latestSettings.current = { bpm, volume, metronomeResolution, metronomeStyle, clickType };
   }, [bpm, volume, metronomeResolution, metronomeStyle, clickType]);
 
-  // --- PATTERN STATE ---
   const [customPatterns, setCustomPatterns] = useState(() => {
     try {
       const saved = localStorage.getItem('campfire_custom_patterns');
@@ -45,33 +43,25 @@ export const RhythmProvider = ({ children }) => {
   const [currentPattern, setCurrentPattern] = useState(defaultPattern.steps);
   const [currentPatternId, setCurrentPatternId] = useState(defaultPattern.id);
 
-  // Engine State (Visuals)
+  // Engine State
   const [currentStepIndex, setCurrentStepIndex] = useState(-1);
   const [currentMeasureIndex, setCurrentMeasureIndex] = useState(0); 
   const [measureProgress, setMeasureProgress] = useState(0);
   const [isCountingIn, setIsCountingIn] = useState(false);
   const [countInBeat, setCountInBeat] = useState(0);
 
-  // Audio Refs
   const audioCtxRef = useRef(null);
   const masterGainRef = useRef(null);
   const countInBuffers = useRef({});
   const timerRef = useRef(null);
-  
-  // Mutable Engine State (Logic)
-  const engineState = useRef({
-    stepIndex: 0,
-    measureIndex: 0,
-    countInBeat: 1,
-    isPlaying: false, 
-    accumulatedTime: 0
-  });
+  const engineState = useRef({ stepIndex: 0, measureIndex: 0, countInBeat: 1, isPlaying: false, accumulatedTime: 0 });
 
-  // --- HELPERS ---
   useEffect(() => {
     if (timeSig === '6/8') setMetronomeResolution('8n'); 
     else setMetronomeResolution('4n'); 
   }, [timeSig]);
+
+  // --- ACTIONS ---
 
   const selectPattern = useCallback((id) => {
     const all = [...RHYTHM_PATTERNS, ...customPatterns];
@@ -84,20 +74,36 @@ export const RhythmProvider = ({ children }) => {
     }
   }, [customPatterns, timeSig]);
 
-  const savePattern = useCallback((newPattern) => {
+  const previewDraftPattern = useCallback((settings) => {
+      const { timeSig: ts, allowedTypes } = settings;
+      const steps = generateValidPattern(ts, allowedTypes);
+      
+      // Load it but DO NOT start playback automatically
+      setTimeSig(ts);
+      setCurrentPattern(steps);
+      setCurrentPatternId('draft'); 
+      stopPlayback();
+      
+      return steps; 
+  }, []);
+
+  const savePattern = useCallback((newPatternObj) => {
     const patternObj = {
         id: `custom_${Date.now()}`,
-        name: `My Rhythm #${customPatterns.length + 1}`,
+        name: newPatternObj.name || `My Rhythm`,
         category: 'User',
-        description: 'Custom generated pattern',
-        ...newPattern
+        description: newPatternObj.description || 'Custom pattern',
+        timeSig: newPatternObj.timeSig || timeSig,
+        steps: newPatternObj.steps
     };
+    
     const updated = [...customPatterns, patternObj];
     setCustomPatterns(updated);
     localStorage.setItem('campfire_custom_patterns', JSON.stringify(updated));
+    
     setCurrentPattern(patternObj.steps);
     setCurrentPatternId(patternObj.id);
-  }, [customPatterns]);
+  }, [customPatterns, timeSig]);
 
   const renamePattern = useCallback((id, newName) => {
     const updated = customPatterns.map(p => p.id === id ? { ...p, name: newName } : p);
@@ -119,91 +125,79 @@ export const RhythmProvider = ({ children }) => {
   }, [customPatterns, currentPatternId]);
 
   const generateRandomPattern = useCallback(() => {
-    const targetDuration = MEASURE_DURATIONS[timeSig] || 1.0;
-    let currentDuration = 0;
-    const steps = [];
-    let lengths = [0.125, 0.25];
-    if (timeSig === '4/4') lengths.push(0.375, 0.5);
-    if (timeSig === '6/8') lengths = [0.125, 0.375]; 
-
-    while (currentDuration < targetDuration - 0.01) {
-        const remaining = targetDuration - currentDuration;
-        let validLengths = lengths.filter(l => l <= remaining + 0.001);
-        if (validLengths.length === 0) validLengths = [remaining];
-        const len = validLengths[Math.floor(Math.random() * validLengths.length)];
-        const isDown = Math.random() > 0.3; 
-        const type = Math.random() > 0.85 ? ' ' : (isDown ? 'D' : 'U');
-        steps.push({ strum: type, duration: len });
-        currentDuration += len;
-    }
+    const steps = generateValidPattern(timeSig, ['quarter','eighth']);
     return { timeSig, steps };
   }, [timeSig]);
 
-  // --- AUDIO INIT ---
+  // --- AUDIO INIT & ENGINE ---
   useEffect(() => {
-    if (!audioCtxRef.current) {
-        const AudioContext = window.AudioContext || window.webkitAudioContext;
-        audioCtxRef.current = new AudioContext();
-        masterGainRef.current = audioCtxRef.current.createGain();
-        masterGainRef.current.connect(audioCtxRef.current.destination);
-        masterGainRef.current.gain.value = volume;
-    }
-    const loadSounds = async () => {
-        for (let i = 1; i <= 4; i++) {
-            try {
-                const res = await fetch(SOUND_MAP[i]);
-                if (res.ok) countInBuffers.current[i] = await audioCtxRef.current.decodeAudioData(await res.arrayBuffer());
-            } catch(e) {}
-        }
-    };
-    loadSounds();
+      if (!audioCtxRef.current) {
+          const AudioContext = window.AudioContext || window.webkitAudioContext;
+          audioCtxRef.current = new AudioContext();
+          masterGainRef.current = audioCtxRef.current.createGain();
+          masterGainRef.current.connect(audioCtxRef.current.destination);
+          masterGainRef.current.gain.value = volume;
+      }
+      const loadSounds = async () => {
+          for (let i = 1; i <= 4; i++) {
+              try {
+                  const res = await fetch(SOUND_MAP[i]);
+                  if (res.ok) countInBuffers.current[i] = await audioCtxRef.current.decodeAudioData(await res.arrayBuffer());
+              } catch(e) {}
+          }
+      };
+      loadSounds();
   }, []);
 
   useEffect(() => {
-    if (masterGainRef.current && audioCtxRef.current) {
-        masterGainRef.current.gain.setTargetAtTime(volume, audioCtxRef.current.currentTime, 0.02);
-    }
+      if (masterGainRef.current && audioCtxRef.current) {
+          masterGainRef.current.gain.setTargetAtTime(volume, audioCtxRef.current.currentTime, 0.02);
+      }
   }, [volume]);
 
-  // --- TONE GENERATORS ---
   const playTone = (freq, type, duration, ramp = 0.001, volStart = 0.5, delay = 0) => {
-    if (!audioCtxRef.current) return;
-    const ctx = audioCtxRef.current;
-    if (ctx.state === 'suspended') ctx.resume();
+      if (!audioCtxRef.current) return;
+      const ctx = audioCtxRef.current;
+      if (ctx.state === 'suspended') ctx.resume();
 
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    
-    osc.connect(gain);
-    gain.connect(masterGainRef.current);
-    
-    osc.frequency.value = freq;
-    osc.type = type;
-    
-    const now = ctx.currentTime + delay;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      
+      osc.connect(gain);
+      gain.connect(masterGainRef.current);
+      
+      osc.frequency.value = freq;
+      osc.type = type;
+      
+      const now = ctx.currentTime + delay;
 
-    gain.gain.setValueAtTime(volStart, now);
-    gain.gain.exponentialRampToValueAtTime(ramp, now + duration);
-    
-    osc.start(now);
-    osc.stop(now + duration);
+      gain.gain.setValueAtTime(volStart, now);
+      gain.gain.exponentialRampToValueAtTime(ramp, now + duration);
+      
+      osc.start(now);
+      osc.stop(now + duration);
   };
 
   const playClick = (isStrong, delay = 0) => {
-    const type = latestSettings.current.clickType;
-    const freq = isStrong && type === 'accented' ? 1000 : 500; 
-    playTone(freq, 'square', 0.05, 0.001, 0.3, delay);
+      const type = latestSettings.current.clickType;
+      const freq = isStrong && type === 'accented' ? 1000 : 500; 
+      playTone(freq, 'square', 0.05, 0.001, 0.3, delay);
   };
 
   const playStrumSound = (isDown) => {
-    const freq = isDown ? 200 : 300;
-    playTone(freq, 'triangle', 0.1, 0.01, 0.4, 0);
+      const freq = isDown ? 200 : 300;
+      playTone(freq, 'triangle', 0.1, 0.01, 0.4, 0);
   };
 
   const playCountVoice = (beatNum) => {
      if (!audioCtxRef.current) return;
+     
      let fileIndex = beatNum;
-     if (timeSig === '6/8' && beatNum > 4) fileIndex = ((beatNum - 1) % 4) + 1; 
+     // 6/8 Logic: Map beats 1-6 to 1, 2, 3, 1, 2, 3
+     if (timeSig === '6/8') {
+        fileIndex = ((beatNum - 1) % 3) + 1; 
+     }
+     
      const buffer = countInBuffers.current[fileIndex];
      if (buffer) {
          const src = audioCtxRef.current.createBufferSource();
@@ -215,7 +209,6 @@ export const RhythmProvider = ({ children }) => {
      }
   };
 
-  // --- SCHEDULER ENGINE ---
   const stopPlayback = () => {
     if (timerRef.current) clearTimeout(timerRef.current);
     engineState.current.isPlaying = false;
@@ -250,7 +243,7 @@ export const RhythmProvider = ({ children }) => {
     const msInterval = (60000 / currentBpm) * intervalMult;
 
     timerRef.current = setTimeout(() => {
-      // FIX: Check the REF, not the State (which is stale in closure)
+      // Robust check against REF
       if (!engineState.current.isPlaying) return;
       
       if (currentBeat < limit) {
@@ -274,7 +267,6 @@ export const RhythmProvider = ({ children }) => {
     const accTime = engineState.current.accumulatedTime;
     const stepDuration = stepData.duration;
 
-    // --- Audio Logic ---
     const playPattern = style === 'pattern' || style === 'both';
     if (playPattern && stepData.strum !== ' ') {
         playStrumSound(stepData.strum === 'D');
@@ -287,7 +279,6 @@ export const RhythmProvider = ({ children }) => {
         if (res === '16n') clickInterval = 0.0625;
 
         const EPSILON = 0.001;
-        // Schedule clicks that fit within this step's duration
         for (let offset = 0; offset < stepDuration - EPSILON; offset += 0.0625) { 
              const timeInMeasure = accTime + offset;
              const isClick = Math.abs(timeInMeasure % clickInterval) < EPSILON;
@@ -300,17 +291,14 @@ export const RhythmProvider = ({ children }) => {
         }
     }
 
-    // --- State Update ---
     setCurrentStepIndex(idx);
     setCurrentMeasureIndex(engineState.current.measureIndex);
     setMeasureProgress(accTime);
 
-    // --- Next Loop ---
     const msDuration = (240000 * stepDuration) / currentBpm;
 
     timerRef.current = setTimeout(() => {
-      if (!engineState.current.isPlaying) return; // Fix here too
-      
+      if (!engineState.current.isPlaying) return;
       let nextIndex = idx + 1;
       let nextAcc = accTime + stepDuration;
       if (nextIndex >= currentPattern.length) {
@@ -332,7 +320,8 @@ export const RhythmProvider = ({ children }) => {
       metronomeResolution, setMetronomeResolution, 
       metronomeStyle, setMetronomeStyle,
       currentStepIndex, currentPattern, currentPatternId,
-      selectPattern, generateRandomPattern, savePattern, renamePattern, deletePattern,
+      selectPattern, previewDraftPattern, savePattern, renamePattern, deletePattern,
+      generateRandomPattern,
       isCountingIn, countInBeat, currentMeasureIndex, measureProgress,
       allPatterns: [...RHYTHM_PATTERNS, ...customPatterns]
     }}>

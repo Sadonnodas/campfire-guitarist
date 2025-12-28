@@ -2,24 +2,25 @@ import React, { useState, useRef } from 'react';
 import { Flame, PlusCircle, RotateCcw } from 'lucide-react';
 import { RhythmProvider } from './context/RhythmContext';
 
+// Components
 import ChordGenerator from './components/ChordGenerator'; 
 import RhythmFooter from './components/RhythmFooter'; 
 import RhythmStaff from './components/RhythmStaff';
 import StrumPattern from './components/StrumPattern';
 import RhythmCount from './components/RhythmCount';
-import PatternBrowser from './components/PatternBrowser'; // Import New Component
+import PatternBrowser from './components/PatternBrowser';
 import DraggableWindow from './components/DraggableWindow';
 
-// --- 1. MASTER LAYOUT CONFIGURATION ---
+// --- MASTER LAYOUT CONFIGURATION ---
 const DEFAULT_WINDOW_CONFIG = {
   chords:  { id: 'chords',  title: 'Chord Generator', x: 150, y: 40,  w: 600, h: 220, visible: true },
-  browser: { id: 'browser', title: 'Pattern Library', x: 150, y: 280, w: 600, h: 300, visible: true }, // New Window
+  browser: { id: 'browser', title: 'Pattern Library', x: 150, y: 280, w: 600, h: 300, visible: true },
   count:   { id: 'count',   title: 'Rhythm Count',    x: 770, y: 40,  w: 600, h: 180, visible: true },
   strum:   { id: 'strum',   title: 'Strum Pattern',   x: 770, y: 220, w: 600, h: 180, visible: true },
   staff:   { id: 'staff',   title: 'Notation',        x: 770, y: 400, w: 600, h: 180, visible: true },
 };
 
-// --- SNAPPING ENGINE (No changes needed here) ---
+// --- SNAPPING ENGINE ---
 const calculateSnap = (activeId, currentRect, partialUpdate, allWindows) => {
     const SNAP = 15; 
     let { x, y, w, h } = { ...currentRect, ...partialUpdate };
@@ -86,7 +87,7 @@ export default function App() {
 
   const dragStartPos = useRef(null);
 
-  // --- SELECTION LOGIC (Unchanged) ---
+  // --- SELECTION LOGIC ---
   const handleBgMouseDown = (e) => {
     if (e.target !== e.currentTarget) return;
     if (!e.shiftKey) setSelectedIds([]);
@@ -197,7 +198,7 @@ export default function App() {
         case 'staff':   return <RhythmStaff />;
         case 'strum':   return <StrumPattern />;
         case 'count':   return <RhythmCount />; 
-        case 'browser': return <PatternBrowser />; // Render new component
+        case 'browser': return <PatternBrowser />; 
         default: return null;
     }
   };
