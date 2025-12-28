@@ -3,7 +3,6 @@ import { Play, Square, Volume2, VolumeX, Settings2, Grid3X3, Activity, Layers } 
 import { useRhythm } from '../context/RhythmContext';
 import { TIME_SIGNATURES } from '../data/rhythmPatterns';
 
-// Simple Icons for Musical Notes
 const NoteQuarter = () => (
     <svg width="12" height="18" viewBox="0 0 12 18" fill="currentColor">
         <ellipse cx="4" cy="14" rx="4" ry="3" transform="rotate(-15 4 14)" />
@@ -108,7 +107,7 @@ const RhythmFooter = () => {
             <div className="w-px h-8 bg-white/10"></div>
 
             {/* Metronome Resolution Selector */}
-            <div className="flex flex-col items-center">
+            <div className={`flex flex-col items-center transition-opacity duration-300 ${metronomeStyle === 'pattern' ? 'opacity-30 pointer-events-none' : 'opacity-100'}`}>
                  <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">Click Resolution</span>
                  <div className="flex gap-1 bg-black/40 p-1 rounded-lg border border-white/5">
                     <button 

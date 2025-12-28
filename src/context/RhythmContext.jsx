@@ -14,65 +14,65 @@ export const useRhythm = () => useContext(RhythmContext);
 const MEASURE_DURATIONS = { '4/4': 1.0, '3/4': 0.75, '6/8': 0.75 };
 
 export const RhythmProvider = ({ children }) => {
+  // State
   const [bpm, setBpm] = useState(70);
   const [timeSig, setTimeSig] = useState('4/4');
   const [isPlaying, setIsPlaying] = useState(false);
   const [countIn, setCountIn] = useState(true);
   const [volume, setVolume] = useState(0.5);
   const [clickType, setClickType] = useState('accented'); 
-
-  // --- AUDIO SETTINGS ---
-  // '4n', '8n', '16n'
   const [metronomeResolution, setMetronomeResolution] = useState('4n');
-  
-  // 'steady' (Real Metronome), 'pattern' (Rhythm Guide), 'both' (Dual)
   const [metronomeStyle, setMetronomeStyle] = useState('pattern'); 
+
+  // --- REF FOR INSTANT UPDATES ---
+  const latestSettings = useRef({
+    bpm, volume, metronomeResolution, metronomeStyle, clickType
+  });
+
+  useEffect(() => {
+    latestSettings.current = { bpm, volume, metronomeResolution, metronomeStyle, clickType };
+  }, [bpm, volume, metronomeResolution, metronomeStyle, clickType]);
 
   // --- PATTERN STATE ---
   const [customPatterns, setCustomPatterns] = useState(() => {
     try {
       const saved = localStorage.getItem('campfire_custom_patterns');
       return saved ? JSON.parse(saved) : [];
-    } catch (e) {
-      return [];
-    }
+    } catch (e) { return []; }
   });
 
   const defaultPattern = RHYTHM_PATTERNS[0] || { steps: [], id: 'default', timeSig: '4/4' };
   const [currentPattern, setCurrentPattern] = useState(defaultPattern.steps);
   const [currentPatternId, setCurrentPatternId] = useState(defaultPattern.id);
 
-  // Engine State
+  // Engine State (Visuals)
   const [currentStepIndex, setCurrentStepIndex] = useState(-1);
   const [currentMeasureIndex, setCurrentMeasureIndex] = useState(0); 
   const [measureProgress, setMeasureProgress] = useState(0);
   const [isCountingIn, setIsCountingIn] = useState(false);
   const [countInBeat, setCountInBeat] = useState(0);
 
-  // Refs
+  // Audio Refs
   const audioCtxRef = useRef(null);
   const masterGainRef = useRef(null);
   const countInBuffers = useRef({});
   const timerRef = useRef(null);
   
+  // Mutable Engine State (Logic)
   const engineState = useRef({
     stepIndex: 0,
     measureIndex: 0,
     countInBeat: 1,
-    isPlaying: false,
+    isPlaying: false, 
     accumulatedTime: 0
   });
 
-  // --- AUTO-DETECT RESOLUTION ---
+  // --- HELPERS ---
   useEffect(() => {
-    if (timeSig === '6/8') {
-        setMetronomeResolution('8n'); 
-    } else {
-        setMetronomeResolution('4n'); 
-    }
+    if (timeSig === '6/8') setMetronomeResolution('8n'); 
+    else setMetronomeResolution('4n'); 
   }, [timeSig]);
 
-  // --- ACTIONS ---
   const selectPattern = useCallback((id) => {
     const all = [...RHYTHM_PATTERNS, ...customPatterns];
     const found = all.find(p => p.id === id);
@@ -92,7 +92,6 @@ export const RhythmProvider = ({ children }) => {
         description: 'Custom generated pattern',
         ...newPattern
     };
-    
     const updated = [...customPatterns, patternObj];
     setCustomPatterns(updated);
     localStorage.setItem('campfire_custom_patterns', JSON.stringify(updated));
@@ -101,9 +100,7 @@ export const RhythmProvider = ({ children }) => {
   }, [customPatterns]);
 
   const renamePattern = useCallback((id, newName) => {
-    const updated = customPatterns.map(p => 
-      p.id === id ? { ...p, name: newName } : p
-    );
+    const updated = customPatterns.map(p => p.id === id ? { ...p, name: newName } : p);
     setCustomPatterns(updated);
     localStorage.setItem('campfire_custom_patterns', JSON.stringify(updated));
   }, [customPatterns]);
@@ -112,7 +109,6 @@ export const RhythmProvider = ({ children }) => {
     const updated = customPatterns.filter(p => p.id !== id);
     setCustomPatterns(updated);
     localStorage.setItem('campfire_custom_patterns', JSON.stringify(updated));
-
     if (currentPatternId === id) {
         const fallback = RHYTHM_PATTERNS[0];
         setCurrentPattern(fallback.steps);
@@ -126,7 +122,6 @@ export const RhythmProvider = ({ children }) => {
     const targetDuration = MEASURE_DURATIONS[timeSig] || 1.0;
     let currentDuration = 0;
     const steps = [];
-
     let lengths = [0.125, 0.25];
     if (timeSig === '4/4') lengths.push(0.375, 0.5);
     if (timeSig === '6/8') lengths = [0.125, 0.375]; 
@@ -135,18 +130,16 @@ export const RhythmProvider = ({ children }) => {
         const remaining = targetDuration - currentDuration;
         let validLengths = lengths.filter(l => l <= remaining + 0.001);
         if (validLengths.length === 0) validLengths = [remaining];
-        
         const len = validLengths[Math.floor(Math.random() * validLengths.length)];
         const isDown = Math.random() > 0.3; 
         const type = Math.random() > 0.85 ? ' ' : (isDown ? 'D' : 'U');
-
         steps.push({ strum: type, duration: len });
         currentDuration += len;
     }
     return { timeSig, steps };
   }, [timeSig]);
 
-  // --- AUDIO ENGINE ---
+  // --- AUDIO INIT ---
   useEffect(() => {
     if (!audioCtxRef.current) {
         const AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -159,10 +152,7 @@ export const RhythmProvider = ({ children }) => {
         for (let i = 1; i <= 4; i++) {
             try {
                 const res = await fetch(SOUND_MAP[i]);
-                if (res.ok) {
-                    const arrayBuffer = await res.arrayBuffer();
-                    countInBuffers.current[i] = await audioCtxRef.current.decodeAudioData(arrayBuffer);
-                }
+                if (res.ok) countInBuffers.current[i] = await audioCtxRef.current.decodeAudioData(await res.arrayBuffer());
             } catch(e) {}
         }
     };
@@ -175,7 +165,8 @@ export const RhythmProvider = ({ children }) => {
     }
   }, [volume]);
 
-  const playTone = (freq, type = 'sine', duration = 0.1, ramp = 0.001, volStart = 0.5) => {
+  // --- TONE GENERATORS ---
+  const playTone = (freq, type, duration, ramp = 0.001, volStart = 0.5, delay = 0) => {
     if (!audioCtxRef.current) return;
     const ctx = audioCtxRef.current;
     if (ctx.state === 'suspended') ctx.resume();
@@ -189,34 +180,30 @@ export const RhythmProvider = ({ children }) => {
     osc.frequency.value = freq;
     osc.type = type;
     
-    gain.gain.setValueAtTime(volStart, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(ramp, ctx.currentTime + duration);
+    const now = ctx.currentTime + delay;
+
+    gain.gain.setValueAtTime(volStart, now);
+    gain.gain.exponentialRampToValueAtTime(ramp, now + duration);
     
-    osc.start();
-    osc.stop(ctx.currentTime + duration);
+    osc.start(now);
+    osc.stop(now + duration);
   };
 
-  // 1. STEADY CLICK (The Metronome)
-  const playClick = (isMeasureStart) => {
-    // Sharp, crisp beep
-    const freq = isMeasureStart ? 1000 : 500;
-    playTone(freq, 'square', 0.05, 0.001, 0.3);
+  const playClick = (isStrong, delay = 0) => {
+    const type = latestSettings.current.clickType;
+    const freq = isStrong && type === 'accented' ? 1000 : 500; 
+    playTone(freq, 'square', 0.05, 0.001, 0.3, delay);
   };
 
-  // 2. RHYTHM SOUND (The Strum)
   const playStrumSound = (isDown) => {
-    // Softer, breathy noise or tone to distinguish from click
-    // Using a saw wave with lower pitch
     const freq = isDown ? 200 : 300;
-    playTone(freq, 'triangle', 0.1, 0.01, 0.4);
+    playTone(freq, 'triangle', 0.1, 0.01, 0.4, 0);
   };
 
   const playCountVoice = (beatNum) => {
      if (!audioCtxRef.current) return;
      let fileIndex = beatNum;
-     if (timeSig === '6/8') {
-        if (beatNum > 4) fileIndex = ((beatNum - 1) % 4) + 1; 
-     }
+     if (timeSig === '6/8' && beatNum > 4) fileIndex = ((beatNum - 1) % 4) + 1; 
      const buffer = countInBuffers.current[fileIndex];
      if (buffer) {
          const src = audioCtxRef.current.createBufferSource();
@@ -228,6 +215,7 @@ export const RhythmProvider = ({ children }) => {
      }
   };
 
+  // --- SCHEDULER ENGINE ---
   const stopPlayback = () => {
     if (timerRef.current) clearTimeout(timerRef.current);
     engineState.current.isPlaying = false;
@@ -244,23 +232,27 @@ export const RhythmProvider = ({ children }) => {
     if (engineState.current.isPlaying) { stopPlayback(); return; }
     if (audioCtxRef.current?.state === 'suspended') audioCtxRef.current.resume();
 
-    engineState.current = { isPlaying: true, stepIndex: 0, measureIndex: 0, countInBeat: 1, accumulatedTime: 0 };
+    engineState.current = { stepIndex: 0, measureIndex: 0, countInBeat: 1, accumulatedTime: 0, isPlaying: true };
     setIsPlaying(true);
     if (countIn) { setIsCountingIn(true); schedulerCountIn(); } 
     else { schedulerPattern(); }
   };
 
   const schedulerCountIn = () => {
+    const currentBpm = latestSettings.current.bpm;
     const limit = timeSig === '6/8' ? 6 : (timeSig === '3/4' ? 3 : 4);
     const intervalMult = timeSig === '6/8' ? 0.5 : 1.0;
     const currentBeat = engineState.current.countInBeat;
+    
     setCountInBeat(currentBeat);
     playCountVoice(currentBeat);
 
-    const msInterval = (60000 / bpm) * intervalMult;
+    const msInterval = (60000 / currentBpm) * intervalMult;
 
     timerRef.current = setTimeout(() => {
+      // FIX: Check the REF, not the State (which is stale in closure)
       if (!engineState.current.isPlaying) return;
+      
       if (currentBeat < limit) {
         engineState.current.countInBeat++;
         schedulerCountIn();
@@ -273,49 +265,54 @@ export const RhythmProvider = ({ children }) => {
   };
 
   const schedulerPattern = () => {
+    const { bpm: currentBpm, metronomeResolution: res, metronomeStyle: style } = latestSettings.current;
+    
     const idx = engineState.current.stepIndex;
     const stepData = currentPattern[idx];
-    
     if (!stepData) { stopPlayback(); return; }
 
     const accTime = engineState.current.accumulatedTime;
-    const isMeasureStart = (Math.abs(accTime) < 0.001);
+    const stepDuration = stepData.duration;
 
-    // --- 1. DETERMINE STEADY METRONOME TRIGGER ---
-    let interval = 0.25; 
-    if (metronomeResolution === '8n') interval = 0.125;
-    if (metronomeResolution === '16n') interval = 0.0625;
-
-    const isSteadyClickTime = (Math.abs(accTime % interval) < 0.001);
-
-    // --- 2. PLAY SOUNDS BASED ON MODE ---
-    const playSteady = metronomeStyle === 'steady' || metronomeStyle === 'both';
-    const playPattern = metronomeStyle === 'pattern' || metronomeStyle === 'both';
-
-    // A. Steady Metronome Click
-    if (playSteady && isSteadyClickTime) {
-        playClick(isMeasureStart);
-    }
-
-    // B. Rhythm Guide (The "Pattern" sound)
-    // Only play if it's NOT a rest/miss
+    // --- Audio Logic ---
+    const playPattern = style === 'pattern' || style === 'both';
     if (playPattern && stepData.strum !== ' ') {
-        // If we are in "Both" mode, we might have a collision where steady click and strum happen at exact same time.
-        // We can either play both, or let them layer.
-        // To make it clearer, let's play the strum.
         playStrumSound(stepData.strum === 'D');
     }
 
+    const playSteady = style === 'steady' || style === 'both';
+    if (playSteady) {
+        let clickInterval = 0.25; 
+        if (res === '8n') clickInterval = 0.125;
+        if (res === '16n') clickInterval = 0.0625;
+
+        const EPSILON = 0.001;
+        // Schedule clicks that fit within this step's duration
+        for (let offset = 0; offset < stepDuration - EPSILON; offset += 0.0625) { 
+             const timeInMeasure = accTime + offset;
+             const isClick = Math.abs(timeInMeasure % clickInterval) < EPSILON;
+             
+             if (isClick) {
+                 const isMeasureStart = Math.abs(timeInMeasure) < EPSILON;
+                 const secondsDelay = (offset * 240) / currentBpm;
+                 playClick(isMeasureStart, secondsDelay);
+             }
+        }
+    }
+
+    // --- State Update ---
     setCurrentStepIndex(idx);
     setCurrentMeasureIndex(engineState.current.measureIndex);
     setMeasureProgress(accTime);
 
-    const msDuration = (240000 * stepData.duration) / bpm;
+    // --- Next Loop ---
+    const msDuration = (240000 * stepDuration) / currentBpm;
 
     timerRef.current = setTimeout(() => {
-      if (!engineState.current.isPlaying) return;
+      if (!engineState.current.isPlaying) return; // Fix here too
+      
       let nextIndex = idx + 1;
-      let nextAcc = accTime + stepData.duration;
+      let nextAcc = accTime + stepDuration;
       if (nextIndex >= currentPattern.length) {
           nextIndex = 0;
           nextAcc = 0;
@@ -333,7 +330,7 @@ export const RhythmProvider = ({ children }) => {
       isPlaying, startPlayback, stopPlayback,
       countIn, setCountIn, volume, setVolume, clickType, setClickType,
       metronomeResolution, setMetronomeResolution, 
-      metronomeStyle, setMetronomeStyle, // New State
+      metronomeStyle, setMetronomeStyle,
       currentStepIndex, currentPattern, currentPatternId,
       selectPattern, generateRandomPattern, savePattern, renamePattern, deletePattern,
       isCountingIn, countInBeat, currentMeasureIndex, measureProgress,

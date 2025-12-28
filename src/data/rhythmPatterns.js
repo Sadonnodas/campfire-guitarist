@@ -29,6 +29,44 @@ export const RHYTHM_PATTERNS = [
     ]
   },
   {
+    id: '44_funk_16',
+    name: 'Funky 16ths',
+    timeSig: '4/4',
+    category: 'Funk',
+    description: 'Quick 16th note motion (1-e-&-a).',
+    steps: [
+      // Beat 1 (D . D U)
+      { strum: 'D', duration: 0.125 }, // 1 & e
+      { strum: 'D', duration: 0.0625 }, { strum: 'U', duration: 0.0625 }, // & a
+      // Beat 2 (Miss . D U)
+      { strum: ' ', duration: 0.125 }, 
+      { strum: 'D', duration: 0.0625 }, { strum: 'U', duration: 0.0625 },
+      // Beat 3 (D U D U) - 16ths
+      { strum: 'D', duration: 0.0625 }, { strum: 'U', duration: 0.0625 },
+      { strum: 'D', duration: 0.0625 }, { strum: 'U', duration: 0.0625 },
+      // Beat 4 (D . . .)
+      { strum: 'D', duration: 0.25 }
+    ]
+  },
+  {
+    id: '44_triplet_feel',
+    name: 'Blues Shuffle',
+    timeSig: '4/4',
+    category: 'Blues',
+    description: 'Triplet feel in 4/4 (Swing).',
+    // Using decimal approx for triplets (0.0833...)
+    steps: [
+      // Beat 1 (Long Short)
+      { strum: 'D', duration: 0.1666 }, { strum: 'U', duration: 0.0834 },
+      // Beat 2
+      { strum: 'D', duration: 0.1666 }, { strum: 'U', duration: 0.0834 },
+      // Beat 3
+      { strum: 'D', duration: 0.1666 }, { strum: 'U', duration: 0.0834 },
+      // Beat 4
+      { strum: 'D', duration: 0.1666 }, { strum: 'U', duration: 0.0834 },
+    ]
+  },
+  {
     id: '44_pop_ballad',
     name: 'Pop Ballad',
     timeSig: '4/4',
