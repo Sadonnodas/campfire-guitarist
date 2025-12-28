@@ -21,9 +21,12 @@ export const RhythmProvider = ({ children }) => {
   const [volume, setVolume] = useState(0.5);
   const [clickType, setClickType] = useState('accented'); 
 
-  // --- METRONOME RESOLUTION STATE ---
-  // '4n' = Quarter, '8n' = Eighth, '16n' = Sixteenth
+  // --- AUDIO SETTINGS ---
+  // '4n', '8n', '16n'
   const [metronomeResolution, setMetronomeResolution] = useState('4n');
+  
+  // 'steady' (Real Metronome), 'pattern' (Rhythm Guide), 'both' (Dual)
+  const [metronomeStyle, setMetronomeStyle] = useState('pattern'); 
 
   // --- PATTERN STATE ---
   const [customPatterns, setCustomPatterns] = useState(() => {
@@ -60,13 +63,12 @@ export const RhythmProvider = ({ children }) => {
     accumulatedTime: 0
   });
 
-  // --- AUTO-DETECT RESOLUTION ON TIME SIG CHANGE ---
+  // --- AUTO-DETECT RESOLUTION ---
   useEffect(() => {
-    // When time signature changes, set a logical default for the metronome
     if (timeSig === '6/8') {
-        setMetronomeResolution('8n'); // 6/8 feels best with 8th notes
+        setMetronomeResolution('8n'); 
     } else {
-        setMetronomeResolution('4n'); // 4/4 and 3/4 feel best with Quarter notes
+        setMetronomeResolution('4n'); 
     }
   }, [timeSig]);
 
@@ -75,7 +77,6 @@ export const RhythmProvider = ({ children }) => {
     const all = [...RHYTHM_PATTERNS, ...customPatterns];
     const found = all.find(p => p.id === id);
     if (found) {
-        // Just set the TimeSig, don't need logic here, the useEffect above handles the metronome default
         if (found.timeSig !== timeSig) setTimeSig(found.timeSig);
         setCurrentPattern(found.steps);
         setCurrentPatternId(found.id);
@@ -174,7 +175,7 @@ export const RhythmProvider = ({ children }) => {
     }
   }, [volume]);
 
-  const playTone = (freq, type = 'sine', duration = 0.1) => {
+  const playTone = (freq, type = 'sine', duration = 0.1, ramp = 0.001, volStart = 0.5) => {
     if (!audioCtxRef.current) return;
     const ctx = audioCtxRef.current;
     if (ctx.state === 'suspended') ctx.resume();
@@ -188,15 +189,26 @@ export const RhythmProvider = ({ children }) => {
     osc.frequency.value = freq;
     osc.type = type;
     
-    gain.gain.setValueAtTime(0.5, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+    gain.gain.setValueAtTime(volStart, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(ramp, ctx.currentTime + duration);
     
     osc.start();
     osc.stop(ctx.currentTime + duration);
   };
 
-  const playClick = (isStrong) => {
-    playTone(isStrong && clickType === 'accented' ? 800 : 440, 'triangle', 0.1);
+  // 1. STEADY CLICK (The Metronome)
+  const playClick = (isMeasureStart) => {
+    // Sharp, crisp beep
+    const freq = isMeasureStart ? 1000 : 500;
+    playTone(freq, 'square', 0.05, 0.001, 0.3);
+  };
+
+  // 2. RHYTHM SOUND (The Strum)
+  const playStrumSound = (isDown) => {
+    // Softer, breathy noise or tone to distinguish from click
+    // Using a saw wave with lower pitch
+    const freq = isDown ? 200 : 300;
+    playTone(freq, 'triangle', 0.1, 0.01, 0.4);
   };
 
   const playCountVoice = (beatNum) => {
@@ -241,10 +253,8 @@ export const RhythmProvider = ({ children }) => {
   const schedulerCountIn = () => {
     const limit = timeSig === '6/8' ? 6 : (timeSig === '3/4' ? 3 : 4);
     const intervalMult = timeSig === '6/8' ? 0.5 : 1.0;
-    
     const currentBeat = engineState.current.countInBeat;
     setCountInBeat(currentBeat);
-    
     playCountVoice(currentBeat);
 
     const msInterval = (60000 / bpm) * intervalMult;
@@ -269,22 +279,31 @@ export const RhythmProvider = ({ children }) => {
     if (!stepData) { stopPlayback(); return; }
 
     const accTime = engineState.current.accumulatedTime;
-    
     const isMeasureStart = (Math.abs(accTime) < 0.001);
 
-    // --- NEW CLICK LOGIC BASED ON RESOLUTION ---
-    let interval = 0.25; // Default Quarter
+    // --- 1. DETERMINE STEADY METRONOME TRIGGER ---
+    let interval = 0.25; 
     if (metronomeResolution === '8n') interval = 0.125;
     if (metronomeResolution === '16n') interval = 0.0625;
 
-    // Check if current accumulated time matches a multiple of the interval
-    // Using simple modulo with small epsilon for float precision
-    const isClickTime = (Math.abs(accTime % interval) < 0.001);
+    const isSteadyClickTime = (Math.abs(accTime % interval) < 0.001);
 
-    if (isMeasureStart) {
-        playClick(true);
-    } else if (isClickTime) {
-        playClick(false);
+    // --- 2. PLAY SOUNDS BASED ON MODE ---
+    const playSteady = metronomeStyle === 'steady' || metronomeStyle === 'both';
+    const playPattern = metronomeStyle === 'pattern' || metronomeStyle === 'both';
+
+    // A. Steady Metronome Click
+    if (playSteady && isSteadyClickTime) {
+        playClick(isMeasureStart);
+    }
+
+    // B. Rhythm Guide (The "Pattern" sound)
+    // Only play if it's NOT a rest/miss
+    if (playPattern && stepData.strum !== ' ') {
+        // If we are in "Both" mode, we might have a collision where steady click and strum happen at exact same time.
+        // We can either play both, or let them layer.
+        // To make it clearer, let's play the strum.
+        playStrumSound(stepData.strum === 'D');
     }
 
     setCurrentStepIndex(idx);
@@ -313,7 +332,8 @@ export const RhythmProvider = ({ children }) => {
       bpm, setBpm, timeSig, setTimeSig,
       isPlaying, startPlayback, stopPlayback,
       countIn, setCountIn, volume, setVolume, clickType, setClickType,
-      metronomeResolution, setMetronomeResolution, // Exposed new state
+      metronomeResolution, setMetronomeResolution, 
+      metronomeStyle, setMetronomeStyle, // New State
       currentStepIndex, currentPattern, currentPatternId,
       selectPattern, generateRandomPattern, savePattern, renamePattern, deletePattern,
       isCountingIn, countInBeat, currentMeasureIndex, measureProgress,

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, Square, Volume2, VolumeX, Settings2 } from 'lucide-react';
+import { Play, Square, Volume2, VolumeX, Settings2, Grid3X3, Activity, Layers } from 'lucide-react';
 import { useRhythm } from '../context/RhythmContext';
 import { TIME_SIGNATURES } from '../data/rhythmPatterns';
 
@@ -33,7 +33,8 @@ const RhythmFooter = () => {
     bpm, setBpm, isPlaying, startPlayback, stopPlayback,
     volume, setVolume, clickType, setClickType,
     timeSig, countIn, setCountIn,
-    metronomeResolution, setMetronomeResolution
+    metronomeResolution, setMetronomeResolution,
+    metronomeStyle, setMetronomeStyle
   } = useRhythm();
 
   return (
@@ -56,7 +57,7 @@ const RhythmFooter = () => {
             </div>
         </div>
 
-        {/* Center: Info Indicators & Metronome Control */}
+        {/* Center: Indicators & Metronome Control */}
         <div className="flex items-center gap-6">
             
             {/* Time Signature Indicator (Read Only) */}
@@ -74,12 +75,41 @@ const RhythmFooter = () => {
                 </div>
             </div>
 
-            {/* Separator */}
+            <div className="w-px h-8 bg-white/10"></div>
+
+            {/* Metronome Mode: Steady vs Pattern */}
+            <div className="flex flex-col items-center">
+                 <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">Metronome Style</span>
+                 <div className="flex gap-1 bg-black/40 p-1 rounded-lg border border-white/5">
+                    <button 
+                        onClick={() => setMetronomeStyle('steady')}
+                        className={`p-1.5 rounded hover:bg-white/5 transition-colors ${metronomeStyle === 'steady' ? 'bg-orange-500 text-white' : 'text-slate-500'}`}
+                        title="Steady Click Only"
+                    >
+                        <Grid3X3 size={16} />
+                    </button>
+                    <button 
+                        onClick={() => setMetronomeStyle('pattern')}
+                        className={`p-1.5 rounded hover:bg-white/5 transition-colors ${metronomeStyle === 'pattern' ? 'bg-orange-500 text-white' : 'text-slate-500'}`}
+                        title="Pattern Rhythm Only"
+                    >
+                        <Activity size={16} />
+                    </button>
+                    <button 
+                        onClick={() => setMetronomeStyle('both')}
+                        className={`p-1.5 rounded hover:bg-white/5 transition-colors ${metronomeStyle === 'both' ? 'bg-orange-500 text-white' : 'text-slate-500'}`}
+                        title="Both (Dual Layer)"
+                    >
+                        <Layers size={16} />
+                    </button>
+                </div>
+            </div>
+
             <div className="w-px h-8 bg-white/10"></div>
 
             {/* Metronome Resolution Selector */}
             <div className="flex flex-col items-center">
-                 <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">Click Every</span>
+                 <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">Click Resolution</span>
                  <div className="flex gap-1 bg-black/40 p-1 rounded-lg border border-white/5">
                     <button 
                         onClick={() => setMetronomeResolution('4n')}
@@ -109,20 +139,10 @@ const RhythmFooter = () => {
 
         {/* Right: Audio Settings */}
         <div className="flex items-center gap-4">
-            {/* Click Type */}
-            <button onClick={() => setClickType(clickType === 'accented' ? 'flat' : 'accented')} className="flex flex-col items-end mr-4 group">
-                <span className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1 group-hover:text-white transition-colors">
-                    <Settings2 size={10} /> Click Tone
-                </span>
-                <span className="text-xs font-bold text-orange-400">{clickType === 'accented' ? 'High/Low' : 'Flat'}</span>
-            </button>
-
-            {/* Count In */}
             <button onClick={() => setCountIn(!countIn)} className={`px-3 py-1 rounded border text-xs font-bold ${countIn ? 'border-orange-500 text-orange-500' : 'border-slate-700 text-slate-600'}`}>
                 Count: {countIn?'ON':'OFF'}
             </button>
-
-            {/* Volume */}
+            
             <div className="flex items-center gap-2 bg-black/30 px-3 py-2 rounded-full border border-white/5">
                 <button onClick={() => setVolume(volume > 0 ? 0 : 0.5)} className="text-slate-400 hover:text-white">
                     {volume === 0 ? <VolumeX size={16}/> : <Volume2 size={16}/>}
