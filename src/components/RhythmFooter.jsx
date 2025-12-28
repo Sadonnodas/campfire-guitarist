@@ -3,17 +3,43 @@ import { Play, Square, Volume2, VolumeX, Settings2 } from 'lucide-react';
 import { useRhythm } from '../context/RhythmContext';
 import { TIME_SIGNATURES } from '../data/rhythmPatterns';
 
+// Simple Icons for Musical Notes
+const NoteQuarter = () => (
+    <svg width="12" height="18" viewBox="0 0 12 18" fill="currentColor">
+        <ellipse cx="4" cy="14" rx="4" ry="3" transform="rotate(-15 4 14)" />
+        <rect x="7" y="0" width="1.5" height="14" />
+    </svg>
+);
+
+const NoteEighth = () => (
+    <svg width="16" height="18" viewBox="0 0 16 18" fill="currentColor">
+        <ellipse cx="4" cy="14" rx="4" ry="3" transform="rotate(-15 4 14)" />
+        <rect x="7" y="0" width="1.5" height="14" />
+        <path d="M 8 0 C 14 2, 14 8, 14 10" stroke="currentColor" strokeWidth="2" fill="none" />
+    </svg>
+);
+
+const NoteSixteenth = () => (
+    <svg width="16" height="18" viewBox="0 0 16 18" fill="currentColor">
+        <ellipse cx="4" cy="14" rx="4" ry="3" transform="rotate(-15 4 14)" />
+        <rect x="7" y="0" width="1.5" height="14" />
+        <path d="M 8 0 C 14 2, 14 7, 14 9" stroke="currentColor" strokeWidth="2" fill="none" />
+        <path d="M 8 5 C 14 7, 14 12, 14 14" stroke="currentColor" strokeWidth="2" fill="none" />
+    </svg>
+);
+
 const RhythmFooter = () => {
   const { 
     bpm, setBpm, isPlaying, startPlayback, stopPlayback,
     volume, setVolume, clickType, setClickType,
-    timeSig, setTimeSig, countIn, setCountIn
+    timeSig, countIn, setCountIn,
+    metronomeResolution, setMetronomeResolution
   } = useRhythm();
 
   return (
     <div className="fixed bottom-0 left-0 w-full h-24 bg-slate-900/95 backdrop-blur-xl border-t border-white/10 px-6 z-50 flex items-center justify-between">
         
-        {/* Left: Play/Stop */}
+        {/* Left: Play/Stop & Tempo */}
         <div className="flex items-center gap-6">
             <button 
                 onClick={isPlaying ? stopPlayback : startPlayback}
@@ -30,13 +56,55 @@ const RhythmFooter = () => {
             </div>
         </div>
 
-        {/* Center: Time Sig */}
-        <div className="flex gap-2">
-            {TIME_SIGNATURES.map(ts => (
-                <button key={ts} onClick={() => setTimeSig(ts)} className={`px-4 py-2 rounded font-bold text-sm transition-colors ${timeSig===ts ? 'bg-white/10 text-white border border-white/20' : 'text-slate-500 hover:bg-white/5'}`}>
-                    {ts}
-                </button>
-            ))}
+        {/* Center: Info Indicators & Metronome Control */}
+        <div className="flex items-center gap-6">
+            
+            {/* Time Signature Indicator (Read Only) */}
+            <div className="flex flex-col items-center">
+                 <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">Time Sig</span>
+                 <div className="flex gap-1 bg-black/40 p-1 rounded-lg border border-white/5">
+                    {TIME_SIGNATURES.map(ts => (
+                        <div 
+                            key={ts} 
+                            className={`px-3 py-1 rounded font-bold text-xs select-none ${timeSig===ts ? 'bg-white/10 text-white border border-white/20' : 'text-slate-600'}`}
+                        >
+                            {ts}
+                        </div>
+                    ))}
+                </div>
+            </div>
+
+            {/* Separator */}
+            <div className="w-px h-8 bg-white/10"></div>
+
+            {/* Metronome Resolution Selector */}
+            <div className="flex flex-col items-center">
+                 <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">Click Every</span>
+                 <div className="flex gap-1 bg-black/40 p-1 rounded-lg border border-white/5">
+                    <button 
+                        onClick={() => setMetronomeResolution('4n')}
+                        className={`w-8 h-7 flex items-center justify-center rounded hover:bg-white/5 transition-colors ${metronomeResolution === '4n' ? 'bg-orange-500 text-white shadow-lg' : 'text-slate-500'}`}
+                        title="Quarter Note"
+                    >
+                        <NoteQuarter />
+                    </button>
+                    <button 
+                        onClick={() => setMetronomeResolution('8n')}
+                        className={`w-8 h-7 flex items-center justify-center rounded hover:bg-white/5 transition-colors ${metronomeResolution === '8n' ? 'bg-orange-500 text-white shadow-lg' : 'text-slate-500'}`}
+                        title="Eighth Note"
+                    >
+                        <NoteEighth />
+                    </button>
+                    <button 
+                        onClick={() => setMetronomeResolution('16n')}
+                        className={`w-8 h-7 flex items-center justify-center rounded hover:bg-white/5 transition-colors ${metronomeResolution === '16n' ? 'bg-orange-500 text-white shadow-lg' : 'text-slate-500'}`}
+                        title="Sixteenth Note"
+                    >
+                        <NoteSixteenth />
+                    </button>
+                </div>
+            </div>
+
         </div>
 
         {/* Right: Audio Settings */}

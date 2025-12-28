@@ -21,6 +21,10 @@ export const RhythmProvider = ({ children }) => {
   const [volume, setVolume] = useState(0.5);
   const [clickType, setClickType] = useState('accented'); 
 
+  // --- METRONOME RESOLUTION STATE ---
+  // '4n' = Quarter, '8n' = Eighth, '16n' = Sixteenth
+  const [metronomeResolution, setMetronomeResolution] = useState('4n');
+
   // --- PATTERN STATE ---
   const [customPatterns, setCustomPatterns] = useState(() => {
     try {
@@ -56,11 +60,22 @@ export const RhythmProvider = ({ children }) => {
     accumulatedTime: 0
   });
 
+  // --- AUTO-DETECT RESOLUTION ON TIME SIG CHANGE ---
+  useEffect(() => {
+    // When time signature changes, set a logical default for the metronome
+    if (timeSig === '6/8') {
+        setMetronomeResolution('8n'); // 6/8 feels best with 8th notes
+    } else {
+        setMetronomeResolution('4n'); // 4/4 and 3/4 feel best with Quarter notes
+    }
+  }, [timeSig]);
+
   // --- ACTIONS ---
   const selectPattern = useCallback((id) => {
     const all = [...RHYTHM_PATTERNS, ...customPatterns];
     const found = all.find(p => p.id === id);
     if (found) {
+        // Just set the TimeSig, don't need logic here, the useEffect above handles the metronome default
         if (found.timeSig !== timeSig) setTimeSig(found.timeSig);
         setCurrentPattern(found.steps);
         setCurrentPatternId(found.id);
@@ -92,13 +107,11 @@ export const RhythmProvider = ({ children }) => {
     localStorage.setItem('campfire_custom_patterns', JSON.stringify(updated));
   }, [customPatterns]);
 
-  // --- NEW: DELETE FUNCTION ---
   const deletePattern = useCallback((id) => {
     const updated = customPatterns.filter(p => p.id !== id);
     setCustomPatterns(updated);
     localStorage.setItem('campfire_custom_patterns', JSON.stringify(updated));
 
-    // If we just deleted the active pattern, reset to default
     if (currentPatternId === id) {
         const fallback = RHYTHM_PATTERNS[0];
         setCurrentPattern(fallback.steps);
@@ -132,7 +145,7 @@ export const RhythmProvider = ({ children }) => {
     return { timeSig, steps };
   }, [timeSig]);
 
-  // --- AUDIO ENGINE INIT ---
+  // --- AUDIO ENGINE ---
   useEffect(() => {
     if (!audioCtxRef.current) {
         const AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -141,7 +154,6 @@ export const RhythmProvider = ({ children }) => {
         masterGainRef.current.connect(audioCtxRef.current.destination);
         masterGainRef.current.gain.value = volume;
     }
-
     const loadSounds = async () => {
         for (let i = 1; i <= 4; i++) {
             try {
@@ -259,13 +271,21 @@ export const RhythmProvider = ({ children }) => {
     const accTime = engineState.current.accumulatedTime;
     
     const isMeasureStart = (Math.abs(accTime) < 0.001);
-    let isBeat = false;
 
-    if (timeSig === '6/8') isBeat = (Math.abs(accTime % 0.375) < 0.001);
-    else isBeat = (Math.abs(accTime % 0.25) < 0.001);
+    // --- NEW CLICK LOGIC BASED ON RESOLUTION ---
+    let interval = 0.25; // Default Quarter
+    if (metronomeResolution === '8n') interval = 0.125;
+    if (metronomeResolution === '16n') interval = 0.0625;
 
-    if (isMeasureStart) playClick(true);
-    else if (isBeat && !isMeasureStart) playClick(false);
+    // Check if current accumulated time matches a multiple of the interval
+    // Using simple modulo with small epsilon for float precision
+    const isClickTime = (Math.abs(accTime % interval) < 0.001);
+
+    if (isMeasureStart) {
+        playClick(true);
+    } else if (isClickTime) {
+        playClick(false);
+    }
 
     setCurrentStepIndex(idx);
     setCurrentMeasureIndex(engineState.current.measureIndex);
@@ -293,6 +313,7 @@ export const RhythmProvider = ({ children }) => {
       bpm, setBpm, timeSig, setTimeSig,
       isPlaying, startPlayback, stopPlayback,
       countIn, setCountIn, volume, setVolume, clickType, setClickType,
+      metronomeResolution, setMetronomeResolution, // Exposed new state
       currentStepIndex, currentPattern, currentPatternId,
       selectPattern, generateRandomPattern, savePattern, renamePattern, deletePattern,
       isCountingIn, countInBeat, currentMeasureIndex, measureProgress,
