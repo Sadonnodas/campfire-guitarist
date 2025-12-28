@@ -1,22 +1,17 @@
 import React, { createContext, useContext, useState, useRef, useEffect, useCallback } from 'react';
-import { RHYTHM_PATTERNS, TIME_SIGNATURES } from '../data/rhythmPatterns';
+import { RHYTHM_PATTERNS } from '../data/rhythmPatterns';
 
-// Import sounds (Keep your existing imports)
+// --- SOUND IMPORTS ---
 import sound1 from '../assets/sounds/1.wav';
 import sound2 from '../assets/sounds/2.wav';
 import sound3 from '../assets/sounds/3.wav';
 import sound4 from '../assets/sounds/4.wav';
 
 const SOUND_MAP = { 1: sound1, 2: sound2, 3: sound3, 4: sound4 };
-
 const RhythmContext = createContext();
 export const useRhythm = () => useContext(RhythmContext);
 
-const TIME_SIG_CONFIG = {
-  '4/4': { countInLimit: 4, intervalMult: 1.0 },
-  '3/4': { countInLimit: 3, intervalMult: 1.0 },
-  '6/8': { countInLimit: 6, intervalMult: 0.5 },
-};
+const MEASURE_DURATIONS = { '4/4': 1.0, '3/4': 0.75, '6/8': 0.75 };
 
 export const RhythmProvider = ({ children }) => {
   const [bpm, setBpm] = useState(70);
@@ -26,16 +21,21 @@ export const RhythmProvider = ({ children }) => {
   const [volume, setVolume] = useState(0.5);
   const [clickType, setClickType] = useState('accented'); 
 
-  // Engine State
-  // Initialize with the first pattern matching 4/4
-  const [currentPattern, setCurrentPattern] = useState(
-    RHYTHM_PATTERNS.find(p => p.timeSig === '4/4').steps
-  );
-  
-  const [currentPatternId, setCurrentPatternId] = useState(
-    RHYTHM_PATTERNS.find(p => p.timeSig === '4/4').id
-  );
+  // --- PATTERN STATE ---
+  const [customPatterns, setCustomPatterns] = useState(() => {
+    try {
+      const saved = localStorage.getItem('campfire_custom_patterns');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  });
 
+  const defaultPattern = RHYTHM_PATTERNS[0] || { steps: [], id: 'default', timeSig: '4/4' };
+  const [currentPattern, setCurrentPattern] = useState(defaultPattern.steps);
+  const [currentPatternId, setCurrentPatternId] = useState(defaultPattern.id);
+
+  // Engine State
   const [currentStepIndex, setCurrentStepIndex] = useState(-1);
   const [currentMeasureIndex, setCurrentMeasureIndex] = useState(0); 
   const [measureProgress, setMeasureProgress] = useState(0);
@@ -45,7 +45,7 @@ export const RhythmProvider = ({ children }) => {
   // Refs
   const audioCtxRef = useRef(null);
   const masterGainRef = useRef(null);
-  const countInBuffers = useRef({}); 
+  const countInBuffers = useRef({});
   const timerRef = useRef(null);
   
   const engineState = useRef({
@@ -57,46 +57,82 @@ export const RhythmProvider = ({ children }) => {
   });
 
   // --- ACTIONS ---
-
-  // Select a specific pattern by ID
   const selectPattern = useCallback((id) => {
-    const found = RHYTHM_PATTERNS.find(p => p.id === id);
+    const all = [...RHYTHM_PATTERNS, ...customPatterns];
+    const found = all.find(p => p.id === id);
     if (found) {
-        setTimeSig(found.timeSig); // Auto-switch time sig if needed
+        if (found.timeSig !== timeSig) setTimeSig(found.timeSig);
         setCurrentPattern(found.steps);
         setCurrentPatternId(found.id);
         stopPlayback();
     }
-  }, []);
+  }, [customPatterns, timeSig]);
 
-  // Randomize within current Time Sig
-  const regeneratePattern = useCallback(() => {
-    const options = RHYTHM_PATTERNS.filter(p => p.timeSig === timeSig);
-    if (!options.length) return;
-    const randomIdx = Math.floor(Math.random() * options.length);
-    const selected = options[randomIdx];
+  const savePattern = useCallback((newPattern) => {
+    const patternObj = {
+        id: `custom_${Date.now()}`,
+        name: `My Rhythm #${customPatterns.length + 1}`,
+        category: 'User',
+        description: 'Custom generated pattern',
+        ...newPattern
+    };
     
-    setCurrentPattern(selected.steps);
-    setCurrentPatternId(selected.id);
-    stopPlayback();
-  }, [timeSig]);
+    const updated = [...customPatterns, patternObj];
+    setCustomPatterns(updated);
+    localStorage.setItem('campfire_custom_patterns', JSON.stringify(updated));
+    setCurrentPattern(patternObj.steps);
+    setCurrentPatternId(patternObj.id);
+  }, [customPatterns]);
 
-  // When Time Sig changes manually via footer, pick a default pattern for it
-  useEffect(() => {
-    // Only switch pattern if the current pattern doesn't match the new time sig
-    const currentPatternObj = RHYTHM_PATTERNS.find(p => p.id === currentPatternId);
-    
-    if (!currentPatternObj || currentPatternObj.timeSig !== timeSig) {
-        const options = RHYTHM_PATTERNS.filter(p => p.timeSig === timeSig);
-        if (options.length > 0) {
-            setCurrentPattern(options[0].steps);
-            setCurrentPatternId(options[0].id);
-        }
+  const renamePattern = useCallback((id, newName) => {
+    const updated = customPatterns.map(p => 
+      p.id === id ? { ...p, name: newName } : p
+    );
+    setCustomPatterns(updated);
+    localStorage.setItem('campfire_custom_patterns', JSON.stringify(updated));
+  }, [customPatterns]);
+
+  // --- NEW: DELETE FUNCTION ---
+  const deletePattern = useCallback((id) => {
+    const updated = customPatterns.filter(p => p.id !== id);
+    setCustomPatterns(updated);
+    localStorage.setItem('campfire_custom_patterns', JSON.stringify(updated));
+
+    // If we just deleted the active pattern, reset to default
+    if (currentPatternId === id) {
+        const fallback = RHYTHM_PATTERNS[0];
+        setCurrentPattern(fallback.steps);
+        setCurrentPatternId(fallback.id);
+        setTimeSig(fallback.timeSig);
         stopPlayback();
     }
+  }, [customPatterns, currentPatternId]);
+
+  const generateRandomPattern = useCallback(() => {
+    const targetDuration = MEASURE_DURATIONS[timeSig] || 1.0;
+    let currentDuration = 0;
+    const steps = [];
+
+    let lengths = [0.125, 0.25];
+    if (timeSig === '4/4') lengths.push(0.375, 0.5);
+    if (timeSig === '6/8') lengths = [0.125, 0.375]; 
+
+    while (currentDuration < targetDuration - 0.01) {
+        const remaining = targetDuration - currentDuration;
+        let validLengths = lengths.filter(l => l <= remaining + 0.001);
+        if (validLengths.length === 0) validLengths = [remaining];
+        
+        const len = validLengths[Math.floor(Math.random() * validLengths.length)];
+        const isDown = Math.random() > 0.3; 
+        const type = Math.random() > 0.85 ? ' ' : (isDown ? 'D' : 'U');
+
+        steps.push({ strum: type, duration: len });
+        currentDuration += len;
+    }
+    return { timeSig, steps };
   }, [timeSig]);
 
-  // --- AUDIO INIT (Same as before) ---
+  // --- AUDIO ENGINE INIT ---
   useEffect(() => {
     if (!audioCtxRef.current) {
         const AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -105,11 +141,15 @@ export const RhythmProvider = ({ children }) => {
         masterGainRef.current.connect(audioCtxRef.current.destination);
         masterGainRef.current.gain.value = volume;
     }
+
     const loadSounds = async () => {
         for (let i = 1; i <= 4; i++) {
             try {
                 const res = await fetch(SOUND_MAP[i]);
-                if (res.ok) countInBuffers.current[i] = await audioCtxRef.current.decodeAudioData(await res.arrayBuffer());
+                if (res.ok) {
+                    const arrayBuffer = await res.arrayBuffer();
+                    countInBuffers.current[i] = await audioCtxRef.current.decodeAudioData(arrayBuffer);
+                }
             } catch(e) {}
         }
     };
@@ -122,40 +162,48 @@ export const RhythmProvider = ({ children }) => {
     }
   }, [volume]);
 
-  const playOscillator = (freq) => {
+  const playTone = (freq, type = 'sine', duration = 0.1) => {
     if (!audioCtxRef.current) return;
     const ctx = audioCtxRef.current;
+    if (ctx.state === 'suspended') ctx.resume();
+
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
+    
     osc.connect(gain);
     gain.connect(masterGainRef.current);
+    
     osc.frequency.value = freq;
-    osc.type = 'sine';
-    gain.gain.setValueAtTime(1, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1);
+    osc.type = type;
+    
+    gain.gain.setValueAtTime(0.5, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+    
     osc.start();
-    osc.stop(ctx.currentTime + 0.1);
+    osc.stop(ctx.currentTime + duration);
   };
 
   const playClick = (isStrong) => {
-    playOscillator(isStrong && clickType === 'accented' ? 800 : 440);
+    playTone(isStrong && clickType === 'accented' ? 800 : 440, 'triangle', 0.1);
   };
 
-  const playCountVoice = (displayNum) => {
-     let soundNum = displayNum;
-     if (timeSig === '6/8') soundNum = ((displayNum - 1) % 3) + 1;
-     
-     if (countInBuffers.current[soundNum]) {
+  const playCountVoice = (beatNum) => {
+     if (!audioCtxRef.current) return;
+     let fileIndex = beatNum;
+     if (timeSig === '6/8') {
+        if (beatNum > 4) fileIndex = ((beatNum - 1) % 4) + 1; 
+     }
+     const buffer = countInBuffers.current[fileIndex];
+     if (buffer) {
          const src = audioCtxRef.current.createBufferSource();
-         src.buffer = countInBuffers.current[soundNum];
+         src.buffer = buffer;
          src.connect(masterGainRef.current);
          src.start();
      } else {
-         playClick(true);
+         playTone(800, 'square', 0.1);
      }
   };
 
-  // --- SCHEDULER (Same logic, verified works with new pattern data structure) ---
   const stopPlayback = () => {
     if (timerRef.current) clearTimeout(timerRef.current);
     engineState.current.isPlaying = false;
@@ -179,15 +227,19 @@ export const RhythmProvider = ({ children }) => {
   };
 
   const schedulerCountIn = () => {
-    const config = TIME_SIG_CONFIG[timeSig] || { countInLimit: 4, intervalMult: 1 };
+    const limit = timeSig === '6/8' ? 6 : (timeSig === '3/4' ? 3 : 4);
+    const intervalMult = timeSig === '6/8' ? 0.5 : 1.0;
+    
     const currentBeat = engineState.current.countInBeat;
     setCountInBeat(currentBeat);
-    playCountVoice(currentBeat); 
-    const msInterval = (60000 / bpm) * config.intervalMult;
+    
+    playCountVoice(currentBeat);
+
+    const msInterval = (60000 / bpm) * intervalMult;
 
     timerRef.current = setTimeout(() => {
       if (!engineState.current.isPlaying) return;
-      if (currentBeat < config.countInLimit) {
+      if (currentBeat < limit) {
         engineState.current.countInBeat++;
         schedulerCountIn();
       } else {
@@ -201,13 +253,19 @@ export const RhythmProvider = ({ children }) => {
   const schedulerPattern = () => {
     const idx = engineState.current.stepIndex;
     const stepData = currentPattern[idx];
-    const accTime = engineState.current.accumulatedTime;
+    
+    if (!stepData) { stopPlayback(); return; }
 
-    const isBeatStart = (Math.abs(accTime % 0.25) < 0.001);
+    const accTime = engineState.current.accumulatedTime;
+    
     const isMeasureStart = (Math.abs(accTime) < 0.001);
+    let isBeat = false;
+
+    if (timeSig === '6/8') isBeat = (Math.abs(accTime % 0.375) < 0.001);
+    else isBeat = (Math.abs(accTime % 0.25) < 0.001);
 
     if (isMeasureStart) playClick(true);
-    else if (isBeatStart) playClick(false);
+    else if (isBeat && !isMeasureStart) playClick(false);
 
     setCurrentStepIndex(idx);
     setCurrentMeasureIndex(engineState.current.measureIndex);
@@ -236,8 +294,9 @@ export const RhythmProvider = ({ children }) => {
       isPlaying, startPlayback, stopPlayback,
       countIn, setCountIn, volume, setVolume, clickType, setClickType,
       currentStepIndex, currentPattern, currentPatternId,
-      regeneratePattern, selectPattern,
-      isCountingIn, countInBeat, currentMeasureIndex, measureProgress
+      selectPattern, generateRandomPattern, savePattern, renamePattern, deletePattern,
+      isCountingIn, countInBeat, currentMeasureIndex, measureProgress,
+      allPatterns: [...RHYTHM_PATTERNS, ...customPatterns]
     }}>
       {children}
     </RhythmContext.Provider>

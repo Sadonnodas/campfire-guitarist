@@ -1,215 +1,144 @@
-import React, { useRef } from 'react';
-import { RefreshCcw } from 'lucide-react';
+import React from 'react';
 import { useRhythm } from '../context/RhythmContext';
 
 const RhythmStaff = () => {
-  const { currentPattern, currentStepIndex, regeneratePattern } = useRhythm();
-  const containerRef = useRef(null);
+  const { currentPattern, currentStepIndex, timeSig } = useRhythm();
+
+  // STAFF CONFIG
+  const STAFF_Y = 60;
+  const STEM_HEIGHT = 35;
+  const TOTAL_WIDTH = 550;
   
-  // 1. Process Pattern for Drawing
+  // Total musical duration of the pattern (e.g., 4/4 = 1.0, 6/8 = 0.75)
+  const patternDuration = currentPattern.reduce((acc, step) => acc + step.duration, 0) || 1;
+
+  // Helper to map musical time (0 -> 1.0) to X pixels
+  const getX = (time) => (time / patternDuration) * (TOTAL_WIDTH - 40) + 20;
+
+  // --- PROCESSING STEPS INTO VISUAL NOTES ---
   let accumulated = 0;
-  const notesWithPosition = currentPattern.map((step, index) => {
-    const startPos = accumulated;
+  const processedNotes = currentPattern.map((step, idx) => {
+    const note = {
+        ...step,
+        start: accumulated,
+        originalIndex: idx,
+        isDotted: (Math.abs(step.duration - 0.375) < 0.01) || (Math.abs(step.duration - 0.75) < 0.01),
+        isQuarter: Math.abs(step.duration - 0.25) < 0.01,
+        isEighth: Math.abs(step.duration - 0.125) < 0.01,
+        isHalf: Math.abs(step.duration - 0.5) < 0.01,
+    };
     accumulated += step.duration;
-    return { ...step, originalIndex: index, startPos };
+    return note;
   });
-  
-  // Total duration (e.g. 1.0 for 4/4)
-  const totalDuration = accumulated || 1;
 
-  // 2. Beaming Logic
-  const groupedNotes = [];
+  // --- BEAMING LOGIC ---
+  const groups = [];
   let currentGroup = [];
-  let groupStartTime = -1;
+  
+  // Define beat boundaries for grouping
+  const GROUP_BOUNDARY = timeSig === '6/8' ? 0.375 : 0.25;
 
-  // Helper to push groups safely
-  const pushGroup = () => {
-    if (currentGroup.length === 0) return;
-    
-    // FIX: If a "beam" group has only 1 note, treat it as a single note so it gets a flag
-    if (currentGroup.length === 1) {
-        groupedNotes.push({ type: 'single', note: currentGroup[0] });
-    } else {
-        groupedNotes.push({ type: 'beam', notes: currentGroup, startTime: groupStartTime });
-    }
-    currentGroup = [];
-  };
+  processedNotes.forEach((note, i) => {
+    if (currentGroup.length > 0) {
+        const firstInGroup = currentGroup[0];
+        const currentBeatStart = Math.floor(firstInGroup.start / GROUP_BOUNDARY) * GROUP_BOUNDARY;
+        const noteBeatStart = Math.floor(note.start / GROUP_BOUNDARY) * GROUP_BOUNDARY;
 
-  notesWithPosition.forEach((note) => {
-    // Break beams on rests or long notes (>= quarter note)
-    if (note.strum === ' ' || note.duration >= 0.25) {
-      pushGroup();
-      groupedNotes.push({ type: 'single', note: note });
+        const isSameBeat = Math.abs(currentBeatStart - noteBeatStart) < 0.001;
+        const canBeam = note.isEighth && note.strum !== ' ' && isSameBeat;
+
+        if (canBeam) {
+            currentGroup.push(note);
+        } else {
+            groups.push(currentGroup);
+            currentGroup = [note];
+        }
     } else {
-      if (currentGroup.length === 0) groupStartTime = note.startPos;
-      currentGroup.push(note);
-      
-      // Break beams on beats (every 0.25)
-      // Check if this note ends on or crosses a beat boundary
-      const noteEnd = note.startPos + note.duration;
-      // Use small epsilon for float comparison
-      if ((noteEnd + 0.001) % 0.25 < 0.01) {
-         pushGroup();
-      }
+        currentGroup = [note];
     }
   });
-  pushGroup();
+  if (currentGroup.length > 0) groups.push(currentGroup);
 
-  // 3. Coordinate System
-  const SVG_WIDTH = 800;
-  const SVG_HEIGHT = 180;
-  const PADDING_X = 60;
-  const DRAWABLE_WIDTH = SVG_WIDTH - (PADDING_X * 2);
-  
-  const getX = (time) => {
-    return PADDING_X + ((time / totalDuration) * DRAWABLE_WIDTH);
-  };
 
-  const NOTE_Y = 100;
-  const STEM_HEIGHT = 45;
+  // --- RENDERING HELPERS ---
+  const renderNoteHead = (x, y, isActive, isHollow, isRest, isDotted) => (
+    <g>
+        {isRest ? (
+            <path d={`M${x-4} ${y-10} L${x+4} ${y-5} L${x-4} ${y} L${x+4} ${y+5} L${x-2} ${y+10} Q${x} ${y+15} ${x-5} ${y+12}`} 
+                  fill="none" stroke={isActive ? "#f97316" : "#94a3b8"} strokeWidth="2.5" />
+        ) : (
+            <>
+                <ellipse cx={x} cy={y} rx="6" ry="5" 
+                         fill={isHollow ? "none" : (isActive ? "#f97316" : "#cbd5e1")} 
+                         stroke={isActive ? "#f97316" : "#cbd5e1"} strokeWidth="2" 
+                         transform={`rotate(-15 ${x} ${y})`} />
+                {isDotted && <circle cx={x + 10} cy={y} r="2" fill={isActive ? "#f97316" : "#cbd5e1"} />}
+            </>
+        )}
+    </g>
+  );
 
-  // --- RENDER HELPERS ---
-
-  const renderRest = (x, y, duration, color) => {
-    // EIGHTH REST (looks like a 7 with a ball)
-    if (duration <= 0.13) {
-        return (
-            <g transform={`translate(${x - 4}, ${y - 15}) scale(1.5)`}>
-                <circle cx="2" cy="3" r="2.5" fill={color} />
-                <path d="M 2 3 Q 8 0 4 10 L 0 20" stroke={color} strokeWidth="1.5" fill="none" />
-            </g>
-        );
-    } 
-    // QUARTER REST (Squiggle)
-    else {
-        return (
-            <g transform={`translate(${x - 5}, ${y - 20}) scale(1.2)`}>
-                <path 
-                    d="M 2 0 L 8 8 L 2 18 L 7 22 L 4 28" 
-                    stroke={color} 
-                    strokeWidth="2.5" 
-                    fill="none" 
-                    strokeLinecap="round" 
-                    strokeLinejoin="round"
-                />
-                <path 
-                    d="M 4 28 Q 2 32 6 30" 
-                    stroke={color} 
-                    strokeWidth="2.5" 
-                    fill="none" 
-                    strokeLinecap="round"
-                />
-            </g>
-        );
-    }
-  };
-
-  const renderNoteHead = (x, y, isActive, isRest, isGhost, duration) => {
-    const color = isActive ? "#f97316" : "#cbd5e1"; 
-    
-    if (isRest) {
-        return renderRest(x, y, duration, color);
-    }
-    
-    return (
-      <g>
-        <ellipse 
-            cx={x} cy={y} 
-            rx="9" ry="7" 
-            fill={isGhost ? 'transparent' : color} 
-            stroke={color} 
-            strokeWidth="2" 
-            transform={`rotate(-15 ${x} ${y})`} 
-        />
-        {isGhost && <text x={x} y={y + 4} textAnchor="middle" fontSize="10" fill={color} fontWeight="bold" style={{ pointerEvents: 'none' }}>x</text>}
-      </g>
-    );
-  };
-  
   const renderStrumSymbol = (x, y, type, isActive) => {
-     const color = isActive ? "#f97316" : "#94a3b8"; 
-     if (type === 'X') return null; 
-     
-     return (
-        <text 
-            x={x} y={type === 'D' ? y - 60 : y - 25} 
-            textAnchor="middle" 
-            fontSize="20" 
-            fill={color} 
-            fontWeight="bold"
-        >
-            {type === 'D' ? '∏' : '∨'}
-        </text>
-     );
+      if (type === 'D') return <path d={`M${x-3} ${y+45} h6 v-4 h-6 z`} stroke={isActive ? "#f97316" : "#64748b"} strokeWidth="2" fill="none"/>; 
+      if (type === 'U') return <path d={`M${x} ${y+40} l-3 5 h6 z`} fill={isActive ? "#f97316" : "#64748b"} />;
+      return null;
   };
 
   return (
-    <div className="w-full h-full relative group bg-black/20" ref={containerRef}>
-      <button 
-        onClick={regeneratePattern}
-        className="absolute top-2 right-2 p-1.5 bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white rounded-lg transition-colors z-20 border border-white/5"
-        title="New Rhythm Pattern"
-      >
-        <RefreshCcw size={14} />
-      </button>
+    <div className="w-full h-full flex items-center justify-center bg-black/40 rounded-xl border border-white/5 overflow-hidden">
+      <svg width="100%" height="100%" viewBox={`0 0 ${TOTAL_WIDTH} 180`} preserveAspectRatio="xMidYMid meet">
+        <line x1="20" y1={STAFF_Y} x2={TOTAL_WIDTH-20} y2={STAFF_Y} stroke="#334155" strokeWidth="2" />
 
-      <svg viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`} className="w-full h-full">
-        <line x1="20" y1={NOTE_Y} x2={SVG_WIDTH - 20} y2={NOTE_Y} stroke="#475569" strokeWidth="2" />
-        
-        {groupedNotes.map((group, gIdx) => {
-            if (group.type === 'single') {
-                const x = getX(group.note.startPos);
-                const { note } = group;
-                const isActive = note.originalIndex === currentStepIndex;
-                const color = isActive ? "#f97316" : "#cbd5e1";
-                
+        {groups.map((group, gIdx) => {
+            const isBeam = group.length > 1;
+            
+            if (isBeam) {
+                const first = group[0];
+                const last = group[group.length - 1];
+                const startX = getX(first.start) + 6; 
+                const endX = getX(last.start) + 6;
+                const beamY = STAFF_Y - STEM_HEIGHT;
+
                 return (
                     <g key={gIdx}>
-                        {renderNoteHead(x, NOTE_Y, isActive, note.strum === ' ', note.strum === 'X', note.duration)}
-                        {note.strum !== ' ' && (
-                            <>
-                                {/* Stem */}
-                                <line x1={x + 8} y1={NOTE_Y} x2={x + 8} y2={NOTE_Y - STEM_HEIGHT} stroke={color} strokeWidth="2" />
-                                {renderStrumSymbol(x, NOTE_Y, note.strum, isActive)}
-                                
-                                {/* Flag (if 8th note and single) */}
-                                {note.duration <= 0.13 && (
-                                    <path d={`M${x+8} ${NOTE_Y - STEM_HEIGHT} Q${x+20} ${NOTE_Y - STEM_HEIGHT + 15} ${x+20} ${NOTE_Y - STEM_HEIGHT + 30}`} stroke={color} strokeWidth="3" fill="none" />
-                                )}
-                                {/* Double Flag (if 16th note and single) */}
-                                {note.duration <= 0.07 && (
-                                    <path d={`M${x+8} ${NOTE_Y - STEM_HEIGHT + 10} Q${x+20} ${NOTE_Y - STEM_HEIGHT + 25} ${x+20} ${NOTE_Y - STEM_HEIGHT + 40}`} stroke={color} strokeWidth="3" fill="none" />
-                                )}
-                            </>
-                        )}
-                    </g>
-                );
-            } else if (group.type === 'beam') {
-                const startX = getX(group.notes[0].startPos) + 8;
-                const lastX = getX(group.notes[group.notes.length-1].startPos) + 8;
-                const beamY = NOTE_Y - STEM_HEIGHT;
-                
-                return (
-                    <g key={gIdx}>
-                        {/* Beam Bar */}
-                        <line x1={startX} y1={beamY} x2={lastX} y2={beamY} stroke="#cbd5e1" strokeWidth="6" />
+                        <line x1={startX} y1={beamY} x2={endX} y2={beamY} stroke="#cbd5e1" strokeWidth="5" />
                         
-                        {group.notes.map((note, i) => {
-                            const x = getX(note.startPos);
+                        {group.map((note, nIdx) => {
+                            const x = getX(note.start);
                             const isActive = note.originalIndex === currentStepIndex;
                             const color = isActive ? "#f97316" : "#cbd5e1";
                             return (
-                                <g key={i}>
-                                    {renderNoteHead(x, NOTE_Y, isActive, false, note.strum === 'X', note.duration)}
-                                    <line x1={x + 8} y1={NOTE_Y} x2={x + 8} y2={beamY} stroke={color} strokeWidth="2" />
-                                    {renderStrumSymbol(x, NOTE_Y, note.strum, isActive)}
+                                <g key={nIdx}>
+                                    {renderNoteHead(x, STAFF_Y, isActive, false, false, note.isDotted)}
+                                    <line x1={x + 6} y1={STAFF_Y} x2={x + 6} y2={beamY} stroke={color} strokeWidth="2" />
+                                    {renderStrumSymbol(x, STAFF_Y, note.strum, isActive)}
                                 </g>
                             )
                         })}
                     </g>
+                )
+            } else {
+                const note = group[0];
+                const x = getX(note.start);
+                const isActive = note.originalIndex === currentStepIndex;
+                const color = isActive ? "#f97316" : "#cbd5e1";
+                const isRest = note.strum === ' ';
+                const isHollow = note.isHalf;
+
+                return (
+                    <g key={gIdx}>
+                        {renderNoteHead(x, STAFF_Y, isActive, isHollow, isRest, note.isDotted)}
+                        
+                        {!isRest && (
+                            <>
+                                <line x1={x + 6} y1={STAFF_Y} x2={x + 6} y2={STAFF_Y - STEM_HEIGHT} stroke={color} strokeWidth="2" />
+                                {note.isEighth && <path d={`M${x+6} ${STAFF_Y - STEM_HEIGHT} c 4 5 8 8 8 16`} stroke={color} strokeWidth="2" fill="none" />}
+                            </>
+                        )}
+                        {renderStrumSymbol(x, STAFF_Y, note.strum, isActive)}
+                    </g>
                 );
             }
-            return null;
         })}
       </svg>
     </div>

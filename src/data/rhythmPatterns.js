@@ -42,29 +42,16 @@ export const RHYTHM_PATTERNS = [
     ]
   },
   {
-    id: '44_indie_folk',
-    name: 'Indie Bounce',
+    id: '44_syncopated',
+    name: 'Wonder Strum',
     timeSig: '4/4',
-    category: 'Folk',
-    description: 'Quick up-strums create a bouncing rhythm.',
+    category: 'Pop',
+    description: 'Features a dotted rhythm opener.',
     steps: [
-      { strum: 'D', duration: 0.25 },
-      { strum: ' ', duration: 0.125 }, { strum: 'U', duration: 0.125 },
-      { strum: 'D', duration: 0.125 }, { strum: 'U', duration: 0.125 },
-      { strum: 'D', duration: 0.125 }, { strum: 'U', duration: 0.125 }
-    ]
-  },
-  {
-    id: '44_country_train',
-    name: 'Country Train',
-    timeSig: '4/4',
-    category: 'Country',
-    description: 'Accent on the 1 and the "and" of 2.',
-    steps: [
-      { strum: 'D', duration: 0.25 },
-      { strum: 'D', duration: 0.125 }, { strum: 'U', duration: 0.125 },
-      { strum: 'D', duration: 0.25 },
-      { strum: 'D', duration: 0.125 }, { strum: 'U', duration: 0.125 }
+      { strum: 'D', duration: 0.375 }, // Dotted quarter (1 & 2)
+      { strum: 'U', duration: 0.125 }, // & (of 2)
+      { strum: ' ', duration: 0.125 }, { strum: 'U', duration: 0.125 }, // (3) &
+      { strum: 'D', duration: 0.25 }, // 4
     ]
   },
 
@@ -93,20 +80,19 @@ export const RHYTHM_PATTERNS = [
       { strum: 'D', duration: 0.125 }, { strum: 'U', duration: 0.125 }
     ]
   },
-  {
-    id: '34_swing',
-    name: 'Jazz Waltz',
-    timeSig: '3/4',
-    category: 'Jazz',
-    description: 'Skipping the middle of the beat.',
-    steps: [
-      { strum: 'D', duration: 0.25 },
-      { strum: ' ', duration: 0.125 }, { strum: 'U', duration: 0.125 },
-      { strum: 'D', duration: 0.25 }
-    ]
-  },
 
   // --- 6/8 PATTERNS ---
+  {
+    id: '68_folk_picker',
+    name: 'Folk Picker',
+    timeSig: '6/8',
+    category: 'Folk',
+    description: 'Emphasis on the outer beats.',
+    steps: [
+      { strum: 'D', duration: 0.375 }, // Dotted quarter
+      { strum: 'D', duration: 0.125 }, { strum: 'U', duration: 0.125 }, { strum: 'D', duration: 0.125 }
+    ]
+  },
   {
     id: '68_slow_blues',
     name: 'Slow Blues',
@@ -115,17 +101,6 @@ export const RHYTHM_PATTERNS = [
     description: 'ONE-and-a TWO-and-a.',
     steps: [
       { strum: 'D', duration: 0.125 }, { strum: 'U', duration: 0.125 }, { strum: 'D', duration: 0.125 },
-      { strum: 'D', duration: 0.125 }, { strum: 'U', duration: 0.125 }, { strum: 'D', duration: 0.125 }
-    ]
-  },
-  {
-    id: '68_arpeggio_feel',
-    name: 'Folk Picker',
-    timeSig: '6/8',
-    category: 'Folk',
-    description: 'Emphasis on the outer beats.',
-    steps: [
-      { strum: 'D', duration: 0.375 }, // Dotted quarter
       { strum: 'D', duration: 0.125 }, { strum: 'U', duration: 0.125 }, { strum: 'D', duration: 0.125 }
     ]
   }
