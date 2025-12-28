@@ -1,6 +1,7 @@
 import React from 'react';
 import { Play, Square, Volume2, VolumeX, Settings2 } from 'lucide-react';
 import { useRhythm } from '../context/RhythmContext';
+import { TIME_SIGNATURES } from '../data/rhythmPatterns';
 
 const RhythmFooter = () => {
   const { 
@@ -31,7 +32,7 @@ const RhythmFooter = () => {
 
         {/* Center: Time Sig */}
         <div className="flex gap-2">
-            {['4/4', '3/4', '6/8', 'Funk', 'Gallop'].map(ts => (
+            {TIME_SIGNATURES.map(ts => (
                 <button key={ts} onClick={() => setTimeSig(ts)} className={`px-4 py-2 rounded font-bold text-sm transition-colors ${timeSig===ts ? 'bg-white/10 text-white border border-white/20' : 'text-slate-500 hover:bg-white/5'}`}>
                     {ts}
                 </button>

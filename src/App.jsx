@@ -7,18 +7,19 @@ import RhythmFooter from './components/RhythmFooter';
 import RhythmStaff from './components/RhythmStaff';
 import StrumPattern from './components/StrumPattern';
 import RhythmCount from './components/RhythmCount';
+import PatternBrowser from './components/PatternBrowser'; // Import New Component
 import DraggableWindow from './components/DraggableWindow';
 
 // --- 1. MASTER LAYOUT CONFIGURATION ---
-// This is the Single Source of Truth. Change positions here!
 const DEFAULT_WINDOW_CONFIG = {
-  chords: { id: 'chords', title: 'Chord Generator', x: 150, y: 40,  w: 600, h: 220, visible: true },
-  count:  { id: 'count',  title: 'Rhythm Count',    x: 770, y: 40,  w: 600, h: 180, visible: true },
-  strum:  { id: 'strum',  title: 'Strum Pattern',   x: 770, y: 220, w: 600, h: 180, visible: true },
-  staff:  { id: 'staff',  title: 'Notation',        x: 770, y: 400, w: 600, h: 180, visible: true },
+  chords:  { id: 'chords',  title: 'Chord Generator', x: 150, y: 40,  w: 600, h: 220, visible: true },
+  browser: { id: 'browser', title: 'Pattern Library', x: 150, y: 280, w: 600, h: 300, visible: true }, // New Window
+  count:   { id: 'count',   title: 'Rhythm Count',    x: 770, y: 40,  w: 600, h: 180, visible: true },
+  strum:   { id: 'strum',   title: 'Strum Pattern',   x: 770, y: 220, w: 600, h: 180, visible: true },
+  staff:   { id: 'staff',   title: 'Notation',        x: 770, y: 400, w: 600, h: 180, visible: true },
 };
 
-// --- SNAPPING ENGINE ---
+// --- SNAPPING ENGINE (No changes needed here) ---
 const calculateSnap = (activeId, currentRect, partialUpdate, allWindows) => {
     const SNAP = 15; 
     let { x, y, w, h } = { ...currentRect, ...partialUpdate };
@@ -70,8 +71,6 @@ const calculateSnap = (activeId, currentRect, partialUpdate, allWindows) => {
 };
 
 export default function App() {
-  // --- WINDOW STATE ---
-  // Initialize by mapping over the config and adding initial Z-indexes
   const [windows, setWindows] = useState(() => {
     const initialstate = {};
     let z = 1;
@@ -81,13 +80,13 @@ export default function App() {
     return initialstate;
   });
   
-  const [topZ, setTopZ] = useState(4); 
+  const [topZ, setTopZ] = useState(10); 
   const [selectedIds, setSelectedIds] = useState([]);
   const [selectionBox, setSelectionBox] = useState(null);
 
   const dragStartPos = useRef(null);
 
-  // --- SELECTION LOGIC ---
+  // --- SELECTION LOGIC (Unchanged) ---
   const handleBgMouseDown = (e) => {
     if (e.target !== e.currentTarget) return;
     if (!e.shiftKey) setSelectedIds([]);
@@ -133,7 +132,6 @@ export default function App() {
     dragStartPos.current = null;
   };
 
-  // --- WINDOW MANIPULATION ---
   const bringToFront = (id) => {
     setWindows(prev => ({ ...prev, [id]: { ...prev[id], z: topZ + 1 } }));
     setTopZ(z => z + 1);
@@ -182,15 +180,12 @@ export default function App() {
   };
 
   const resetLayout = () => {
-    // Re-apply the default config, but increment Z-index so they stay on top
     let currentZ = topZ;
     const resetState = {};
-    
     Object.keys(DEFAULT_WINDOW_CONFIG).forEach(key => {
         currentZ++;
         resetState[key] = { ...DEFAULT_WINDOW_CONFIG[key], z: currentZ };
     });
-
     setWindows(resetState);
     setTopZ(currentZ);
     setSelectedIds([]);
@@ -198,10 +193,11 @@ export default function App() {
 
   const renderContent = (id) => {
     switch(id) {
-        case 'chords': return <ChordGenerator />;
-        case 'staff': return <RhythmStaff />;
-        case 'strum': return <StrumPattern />;
-        case 'count': return <RhythmCount />; 
+        case 'chords':  return <ChordGenerator />;
+        case 'staff':   return <RhythmStaff />;
+        case 'strum':   return <StrumPattern />;
+        case 'count':   return <RhythmCount />; 
+        case 'browser': return <PatternBrowser />; // Render new component
         default: return null;
     }
   };

@@ -1,8 +1,9 @@
 import React from 'react';
+import { RefreshCcw } from 'lucide-react';
 import { useRhythm } from '../context/RhythmContext';
 
 const StrumPattern = () => {
-  const { currentPattern, currentStepIndex, isCountingIn, countInBeat } = useRhythm();
+  const { currentPattern, currentStepIndex, isCountingIn, countInBeat, regeneratePattern } = useRhythm();
 
   if (isCountingIn) {
     return (
@@ -14,7 +15,17 @@ const StrumPattern = () => {
   }
 
   return (
-    <div className="flex justify-between items-stretch bg-black/40 p-1 rounded-xl overflow-hidden relative h-full border border-white/5">
+    <div className="flex justify-between items-stretch bg-black/40 p-1 rounded-xl overflow-hidden relative h-full border border-white/5 group">
+        
+        {/* Added: Regenerate Button (Visible on Hover) */}
+        <button 
+          onClick={(e) => { e.stopPropagation(); regeneratePattern(); }}
+          className="absolute top-2 right-2 p-1.5 bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white rounded-lg transition-colors z-30 border border-white/5 opacity-0 group-hover:opacity-100"
+          title="Randomize Pattern"
+        >
+          <RefreshCcw size={14} />
+        </button>
+
         {/* Background Highlighter */}
         <div 
             className="absolute top-0 bottom-0 bg-orange-500/20 transition-all duration-100 ease-linear"
